@@ -14,6 +14,19 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * PlaybackControls: データ再生コントロール全体
+ *
+ * 主な機能:
+ * - Scrubber: 時間軸スライダーとプログレス表示
+ * - PlaybackTimeDisplay: 現在時刻表示と時間入力
+ * - PlaybackSpeedControls: 再生速度変更ドロップダウン
+ * - 再生/一時停止/シーク操作ボタン群
+ * - リピート機能とイベント作成機能
+ * - キーボードショートカット (スペース: 再生/停止, 左右矢印: シーク)
+ * - BroadcastManagerによるマルチインスタンス同期
+ */
+
 import {
   ArrowRepeatAll20Regular,
   ArrowRepeatAllOff20Regular,

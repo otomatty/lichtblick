@@ -20,31 +20,80 @@ import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import { makeConfig } from "@lichtblick/suite-base/webpack";
 import * as palette from "@lichtblick/theme/src/palette";
 
+/**
+ * Webpack設定生成モジュール
+ *
+ * このモジュールはLichtblick Webアプリケーション用のWebpack設定を生成する
+ * 開発環境と本番環境の両方に対応し、最適化されたビルド設定を提供する
+ *
+ * 主な機能:
+ * 1. 開発サーバー設定
+ *    - ホットリロード対応
+ *    - ヒストリーAPIフォールバック
+ *    - CORS設定
+ *    - クロスオリジン分離設定
+ *
+ * 2. 本番ビルド設定
+ *    - コード分割とバンドル最適化
+ *    - ソースマップ生成
+ *    - 静的アセット処理
+ *    - HTMLテンプレート生成
+ *
+ * 3. TypeScript/React対応
+ *    - TypeScript コンパイル設定
+ *    - React Fast Refresh
+ *    - JSX変換設定
+ *
+ * 使用パターン:
+ * - 開発時: webpack-dev-server での開発
+ * - ビルド時: 本番用静的ファイル生成
+ * - テスト時: Jest との連携
+ */
+
 export interface WebpackConfiguration extends Configuration {
   devServer?: WebpackDevServerConfiguration;
 }
 
+/**
+ * Webpack設定パラメータの型定義
+ * ビルド設定をカスタマイズするためのオプション群
+ */
 export type ConfigParams = {
-  /** Directory to find `entrypoint` and `tsconfig.json`. */
+  /** `entrypoint` と `tsconfig.json` を見つけるディレクトリ */
   contextPath: string;
+  /** アプリケーションのエントリーポイントファイル */
   entrypoint: string;
+  /** ビルド出力先ディレクトリ */
   outputPath: string;
+  /** 静的ファイルの公開パス（CDN等で使用） */
   publicPath?: string;
-  /** Source map (`devtool`) setting to use for production builds */
+  /** 本番ビルド用のソースマップ設定（`devtool`） */
   prodSourceMap: string | false;
-  /** Set the app version information */
+  /** アプリケーションのバージョン情報 */
   version: string;
-  /** Needs to be overridden for react-router */
+  /** react-router用に上書きが必要なヒストリーAPIフォールバック設定 */
   historyApiFallback?: ConnectHistoryApiFallbackOptions;
-  /** Customizations to index.html */
+  /** index.htmlのカスタマイズオプション */
   indexHtmlOptions?: Partial<HtmlWebpackPlugin.Options>;
 };
 
+/**
+ * 開発サーバー用のWebpack設定を生成
+ *
+ * 開発時の快適性を重視した設定で、以下の機能を提供:
+ * 1. ホットモジュールリプレースメント（HMR）
+ * 2. ヒストリーAPIフォールバック（SPA対応）
+ * 3. セキュリティヘッダー設定
+ * 4. エラーオーバーレイ設定
+ *
+ * @param params - 設定パラメータ
+ * @returns 開発サーバー用Webpack設定
+ */
 export const devServerConfig = (params: ConfigParams): WebpackConfiguration => ({
-  // Use empty entry to avoid webpack default fallback to /src
+  // webpack のデフォルトフォールバック（/src）を避けるため空のエントリーを使用
   entry: {},
 
-  // Output path must be specified here for HtmlWebpackPlugin within render config to work
+  // HtmlWebpackPlugin が render config 内で動作するために、ここで出力パスを指定
   output: {
     publicPath: params.publicPath ?? "",
     path: params.outputPath,
@@ -54,39 +103,40 @@ export const devServerConfig = (params: ConfigParams): WebpackConfiguration => (
     static: {
       directory: params.outputPath,
     },
+    // SPA（Single Page Application）のルーティング対応
     historyApiFallback: params.historyApiFallback,
+    // ホットリロード機能を有効化
     hot: true,
-    // The problem and solution are described at <https://github.com/webpack/webpack-dev-server/issues/1604>.
-    // When running in dev mode two errors are logged to the dev console:
+    // 問題と解決方法は <https://github.com/webpack/webpack-dev-server/issues/1604> で説明されている
+    // 開発モードで実行時に開発コンソールに2つのエラーがログ出力される:
     //  "Invalid Host/Origin header"
     //  "[WDS] Disconnected!"
-    // Since we are only connecting to localhost, DNS rebinding attacks are not a concern during dev
+    // localhost にのみ接続しているため、開発時は DNS rebinding 攻撃の心配はない
     allowedHosts: "all",
     headers: {
-      // Enable cross-origin isolation: https://resourcepolicy.fyi
+      // クロスオリジン分離を有効化: https://resourcepolicy.fyi
       "cross-origin-opener-policy": "same-origin",
       "cross-origin-embedder-policy": "credentialless",
     },
 
     client: {
       overlay: {
+        // 終了したWebWorkerからのimportScriptエラーのオーバーレイを抑制
         runtimeErrors: (error) => {
-          // Suppress overlays for importScript errors from terminated webworkers.
+          // WebWorkerが終了した時、保留中の `importScript` 呼び出しはブラウザによってキャンセルされる
+          // これらはdevtoolsのネットワークタブに "(cancelled)" として表示され、
+          // 親ページに `window.onerror` をトリガーするエラーとして浮上する
           //
-          // When a webworker is terminated, any pending `importScript` calls are cancelled by the
-          // browser. These appear in the devtools network tab as "(cancelled)" and bubble up to the
-          // parent page as errors which trigger `window.onerror`.
+          // webpack devserver は window error handler にアタッチして、
+          // ページに送信された未処理エラーを表面化する。しかし、この種のエラーは
+          // ワーカー自体が消失しているため、終了したワーカーにとっては偽陽性である
+          // ネットワークリクエストがキャンセルされても気にしない
           //
-          // webpack devserver attaches to the window error handler surface unhandled errors sent to
-          // the page. However this kind of error is a false-positive for a worker that is
-          // terminated because we do not care that its network requests were cancelled since the
-          // worker itself is gone.
-          //
-          // Will this hide real importScript errors during development?
-          // It is possible that a worker encounters this error during normal operation (if
-          // importing a script does fail for a legitimate reason). In that case we expect the
-          // worker logic that depended on the script to fail execution and trigger other kinds of
-          // errors. The developer can still see the importScripts error in devtools console.
+          // これにより開発中の実際のimportScriptエラーが隠される可能性があるか？
+          // ワーカーが通常の動作中にこのエラーに遭遇する可能性がある（正当な理由で
+          // スクリプトのインポートが失敗した場合）。その場合、スクリプトに依存していた
+          // ワーカーロジックが実行に失敗し、他の種類のエラーをトリガーすることを期待する。
+          // 開発者はdevtoolsコンソールでimportScriptsエラーを確認できる。
           if (
             error.message.startsWith(
               `Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'`,
@@ -104,20 +154,41 @@ export const devServerConfig = (params: ConfigParams): WebpackConfiguration => (
   plugins: [new CleanWebpackPlugin()],
 });
 
+/**
+ * メインのWebpack設定を生成する関数
+ *
+ * 開発環境と本番環境の両方に対応した包括的なWebpack設定を生成する
+ * 環境に応じて最適化レベルやプラグイン構成を動的に調整する
+ *
+ * 設定内容:
+ * 1. TypeScript/JSXコンパイル
+ * 2. 静的アセット処理（画像、フォント等）
+ * 3. HTMLテンプレート生成
+ * 4. コード分割とバンドル最適化
+ * 5. ソースマップ生成
+ * 6. React Fast Refresh（開発時）
+ *
+ * @param params - ビルド設定パラメータ
+ * @returns Webpack設定を返す関数
+ */
 export const mainConfig =
   (params: ConfigParams) =>
   (env: unknown, argv: WebpackArgv): Configuration => {
+    // 環境判定
     const isDev = argv.mode === "development";
     const isServe = argv.env?.WEBPACK_SERVE ?? false;
 
+    // 開発時は未使用変数を許可（開発効率のため）
     const allowUnusedVariables = isDev;
 
     const plugins: WebpackPluginInstance[] = [];
 
+    // 開発サーバー実行時はReact Fast Refreshを有効化
     if (isServe) {
       plugins.push(new ReactRefreshPlugin());
     }
 
+    // ベースとなるWebpack設定を取得
     const appWebpackConfig = makeConfig(env, argv, {
       allowUnusedVariables,
       version: params.version,
@@ -128,34 +199,45 @@ export const mainConfig =
 
       ...appWebpackConfig,
 
+      // ブラウザ環境をターゲット
       target: "web",
+      // TypeScript設定ファイルの検索起点
       context: params.contextPath,
+      // アプリケーションエントリーポイント
       entry: params.entrypoint,
+      // ソースマップ設定（開発時は高速、本番時は設定可能）
       devtool: isDev ? "eval-cheap-module-source-map" : params.prodSourceMap,
 
       output: {
+        // 静的ファイルの公開パス（CDN対応）
         publicPath: params.publicPath ?? "auto",
 
-        // Output filenames should include content hashes in order to cache bust when new versions are available
+        // キャッシュバスティングのため、本番時はファイル名にコンテンツハッシュを含める
         filename: isDev ? "[name].js" : "[name].[contenthash].js",
 
+        // ビルド出力先ディレクトリ
         path: params.outputPath,
       },
 
       plugins: [
         ...plugins,
         ...(appWebpackConfig.plugins ?? []),
+        // 静的ファイル（favicon等）をコピー
         new CopyPlugin({
           patterns: [{ from: path.resolve(__dirname, "..", "public") }],
         }),
+        // HTMLテンプレート生成プラグイン
         new HtmlWebpackPlugin({
+          // カスタムHTMLテンプレート
           templateContent: ({ htmlWebpackPlugin }) => `
   <!doctype html>
   <html>
     <head>
       <meta charset="utf-8">
+      <!-- PWA対応のためのmeta tag -->
       <meta name="apple-mobile-web-app-capable" content="yes">
       ${htmlWebpackPlugin.options.foxgloveExtraHeadTags}
+      <!-- 初期ローディング時のスタイル -->
       <style type="text/css" id="loading-styles">
         body {
           margin: 0;
@@ -165,6 +247,7 @@ export const mainConfig =
           background-color: ${palette.light.background?.default};
           color: ${palette.light.text?.primary};
         }
+        /* ダークモード対応 */
         @media (prefers-color-scheme: dark) {
           #root {
             background-color: ${palette.dark.background?.default}};
@@ -174,20 +257,24 @@ export const mainConfig =
       </style>
     </head>
     <script>
+      <!-- グローバル変数の初期化 -->
       global = globalThis;
       globalThis.LICHTBLICK_SUITE_DEFAULT_LAYOUT = [/*LICHTBLICK_SUITE_DEFAULT_LAYOUT_PLACEHOLDER*/][0];
     </script>
     <body>
+      <!-- Reactアプリケーションのマウントポイント -->
       <div id="root"></div>
     </body>
   </html>
   `,
+          // 追加のHTMLヘッダータグ（favicon、タイトル等）
           foxgloveExtraHeadTags: `
             <title>Lichtblick</title>
             <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
             <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
             <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
           `,
+          // 外部からの追加オプション
           ...params.indexHtmlOptions,
         }),
       ],

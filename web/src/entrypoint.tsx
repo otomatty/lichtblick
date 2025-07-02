@@ -7,4 +7,5 @@
 
 import { main } from "@lichtblick/suite-web";
 
+// エントリーポイント: アプリケーションを初期化してレンダリングを開始します
 void main();

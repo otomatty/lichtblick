@@ -17,6 +17,7 @@ import CssBaseline from "./components/CssBaseline";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AppConfigurationContext from "./context/AppConfigurationContext";
 
+// SharedRoot: テーマや各種 ContextProvider でアプリ全体をラップするルートコンポーネント
 export function SharedRoot(
   props: ISharedRootContext & { children: React.JSX.Element },
 ): React.JSX.Element {
@@ -38,10 +39,14 @@ export function SharedRoot(
   return (
     <AppConfigurationContext.Provider value={appConfiguration}>
       <AppParametersProvider>
+        {/* URL やストレージからパラメータを読み込む */}
         <ColorSchemeThemeProvider>
+          {/* テーマとグローバルCSSの適用 */}
           {enableGlobalCss && <GlobalCss />}
           <CssBaseline>
+            {/* ブラウザ間のスタイル差異をリセット */}
             <ErrorBoundary>
+              {/* 子コンポーネントのエラーをキャッチ */}
               <SharedRootContext.Provider
                 value={{
                   appBarLeftInset,

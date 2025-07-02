@@ -5,6 +5,18 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * Sidebars: サイドバーシステム全体の管理
+ *
+ * 主な機能:
+ * - MosaicWithoutDragDropContextによる3分割レイアウト (leftbar/children/rightbar)
+ * - NewSidebar: 新UI形式のタブ付きサイドバー
+ * - 旧形式のタブナビゲーション (enableNewTopNavが無効時)
+ * - 各サイドバーアイテムはErrorBoundaryでラップ
+ * - リサイズ可能なサイドバー幅制御
+ * - ヘルプメニューとメモリ使用量インジケータ
+ */
+
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { Badge, Paper, Tab, Tabs } from "@mui/material";
 import { MouseEvent, PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";

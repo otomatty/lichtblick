@@ -5,6 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * DataSourceDialog: データソース接続ダイアログ
+ *
+ * 主な機能:
+ * - ローカルファイル読み込み (bag/mcap/foxe)
+ * - リモート接続 (Websocket/ROS)
+ * - サンプルデータセット
+ * - 最近使用したファイル履歴
+ * - Connection: リモート接続設定
+ * - Start: スタート画面とファイル選択
+ * - Snow: シーズナルエフェクト (年末年始)
+ */
+
 import CloseIcon from "@mui/icons-material/Close";
 import { Dialog, IconButton } from "@mui/material";
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react";

@@ -10,8 +10,9 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
 import * as en from "./en";
+import * as ja from "./ja";
 
-export const translations = { en };
+export const translations = { en, ja };
 
 export type Language = keyof typeof translations;
 

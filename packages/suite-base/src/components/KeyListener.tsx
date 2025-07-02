@@ -14,6 +14,18 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * KeyListener: グローバルキーボードショートカット
+ *
+ * 主な機能:
+ * - '[' / ']': 左右サイドバーの開閉
+ * - 'Ctrl+O' / 'Cmd+O': ファイル開く
+ * - 'Ctrl+Shift+O' / 'Cmd+Shift+O': データソース選択
+ * - keydown/keypress/keyup イベント処理
+ * - 編集可能要素での入力中は無視
+ * - グローバル(document)またはローカル(parent)での適用
+ */
+
 import { ReactElement, useCallback, useEffect, useRef } from "react";
 
 // Invoke handler for matching key.

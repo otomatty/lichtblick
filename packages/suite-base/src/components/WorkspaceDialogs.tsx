@@ -5,6 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * WorkspaceDialogs: ワークスペース関連ダイアログ群
+ *
+ * 主な機能:
+ * - AppSettingsDialog: アプリ設定ダイアログ
+ * - ファイル選択ダイアログ
+ * - エラー表示ダイアログ
+ * - 確認ダイアログ等の共通UI
+ * - ワークスペースレベルで管理される各種ダイアログ状態
+ */
+
 import { AppSettingsDialog } from "@lichtblick/suite-base/components/AppSettingsDialog";
 import {
   useWorkspaceStore,

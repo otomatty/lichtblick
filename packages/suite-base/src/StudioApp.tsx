@@ -44,6 +44,7 @@ function contextMenuHandler(event: MouseEvent) {
   return false;
 }
 
+// StudioApp: ワークスペースと関連プロバイダーをまとめるメインコンポーネント
 export function StudioApp(): React.JSX.Element {
   const {
     dataSources,
@@ -111,7 +112,9 @@ export function StudioApp(): React.JSX.Element {
         <SendNotificationToastAdapter />
         <DndProvider backend={HTML5Backend}>
           <Suspense fallback={<></>}>
+            {/* PanelCatalogProvider: パネルカタログ情報を提供 */}
             <PanelCatalogProvider>
+              {/* Workspace: サイドバー、レイアウト、パネルなどのメインUI */}
               <Workspace
                 deepLinks={deepLinks}
                 appBarLeftInset={appBarLeftInset}

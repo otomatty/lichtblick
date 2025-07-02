@@ -5,6 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * SyncAdapters: マルチインスタンス間の同期処理
+ *
+ * 主な機能:
+ * - 複数のLichtblickインスタンス間でのタイムライン同期
+ * - ブロードキャストメッセージによる再生状態同期
+ * - URLStateSyncAdapter: URL状態同期 (ブラウザ履歴と連携)
+ * - CurrentLayoutLocalStorageSyncAdapter: レイアウトのローカルストレージ同期
+ * - AppContextからのカスタム同期アダプター対応
+ */
+
 import { useMemo } from "react";
 
 import { CurrentLayoutLocalStorageSyncAdapter } from "@lichtblick/suite-base/components/CurrentLayoutLocalStorageSyncAdapter";

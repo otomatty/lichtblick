@@ -27,6 +27,7 @@ import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguratio
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
+// WebRoot: SharedRoot でアプリ全体のコンテキストとレイアウトを提供するコンポーネント
 export function WebRoot(props: {
   extraProviders: React.JSX.Element[] | undefined;
   dataSources: IDataSourceFactory[] | undefined;
@@ -63,6 +64,7 @@ export function WebRoot(props: {
     return props.dataSources ?? sources;
   }, [props.dataSources]);
 
+  // SharedRoot でアプリ設定、データソース、拡張機能ローダーを提供
   return (
     <SharedRoot
       enableLaunchPreferenceScreen

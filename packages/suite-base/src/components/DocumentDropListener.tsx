@@ -14,6 +14,18 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * DocumentDropListener: ファイルドラッグ&ドロップハンドラー
+ *
+ * 主な機能:
+ * - bag/mcap/foxe/jsonファイルの直接ドロップ対応
+ * - FileSystemFileHandle APIサポート (Chrome等)
+ * - ドロップ時の自動プレイヤー選択と読み込み
+ * - ディレクトリドロップ対応 (ディレクトリ内ファイル展開)
+ * - DropOverlay: ドロップホバー時のUI表示
+ * - Puppeteer用の隠しファイルインプット
+ */
+
 import { useSnackbar } from "notistack";
 import { extname } from "path";
 import { useCallback, useLayoutEffect, useState } from "react";

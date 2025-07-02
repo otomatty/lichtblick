@@ -563,14 +563,62 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     playUntil,
   });
 
+  // パネル状態コンテキストでワークスペース全体をラップします
   return (
     <PanelStateContextProvider>
+      {/* データソースダイアログ: データソース選択用 */}
+      {/*
+       * DataSourceDialog: データソース接続ダイアログ
+       * - ローカルファイル読み込み (bag/mcap/foxe)
+       * - リモート接続 (Websocket/ROS)
+       * - サンプルデータセット
+       * - 最近使用したファイル履歴
+       */}
       {dataSourceDialog.open && <DataSourceDialog />}
+      {/* ドラッグ&ドロップリスナー: ファイルドロップ対応 */}
+      {/*
+       * DocumentDropListener: ファイルドラッグ&ドロップハンドラー
+       * - bag/mcap/foxe/jsonファイルの直接ドロップ対応
+       * - FileSystemFileHandle APIサポート (Chrome等)
+       * - ドロップ時の自動プレイヤー選択と読み込み
+       */}
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
+      {/* 同期アダプター: 外部からの同期イベント処理 */}
+      {/*
+       * SyncAdapters: マルチインスタンス間の同期処理
+       * - 複数のLichtblickインスタンス間でのタイムライン同期
+       * - ブロードキャストメッセージによる再生状態同期
+       */}
       <SyncAdapters />
+      {/* キーリスナー: ショートカットキー操作 */}
+      {/*
+       * KeyListener: グローバルキーボードショートカット
+       * - '[' / ']': 左右サイドバーの開閉
+       * - 'Ctrl+O' / 'Cmd+O': ファイル開く
+       * - 'Ctrl+Shift+O' / 'Cmd+Shift+O': データソース選択
+       */}
       <KeyListener global keyDownHandlers={keyDownHandlers} />
+      {/* メインコンテナ: アプリコンテンツ全体 */}
       <div className={classes.container} ref={containerRef} tabIndex={0}>
+        {/* AppBar: ツールバーコンポーネント */}
+        {/*
+         * AppBar: アプリケーション上部ツールバー
+         * - レイアウト管理 (作成/保存/読み込み)
+         * - パネル追加機能
+         * - 変数管理とエクステンション設定
+         * - ウィンドウ制御 (最小化/最大化/閉じる)
+         * - ヘルプメニューとアカウント設定
+         */}
         {appBar}
+        {/* Sidebars: サイドバー (左/右) レンダリング */}
+        {/*
+         * Sidebars: サイドバーシステム全体の管理
+         * - MosaicWithoutDragDropContextによる3分割レイアウト (leftbar/children/rightbar)
+         * - NewSidebar: 新UI形式のタブ付きサイドバー
+         * - 旧形式のタブナビゲーション (enableNewTopNavが無効時)
+         * - 各サイドバーアイテムはErrorBoundaryでラップ
+         * - リサイズ可能なサイドバー幅制御
+         */}
         <Sidebars
           selectedKey=""
           onSelectKey={() => {}}
@@ -587,26 +635,55 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           rightSidebarSize={rightSidebarSize}
           setRightSidebarSize={sidebarActions.right.setSize}
         >
-          {/* To ensure no stale player state remains, we unmount all panels when players change */}
+          {/* パネル再マウント: プレイヤー変更時にパネルをリセット */}
+          {/*
+           * RemountOnValueChange: プレイヤー変更時の強制再マウント
+           * - playerId変更を検知してパネル群を完全にリマウント
+           * - 古いプレイヤー状態の残留を防ぐためのクリーンアップ
+           * - Stack内にPanelLayoutを配置して一括管理
+           */}
           <RemountOnValueChange value={playerId}>
             <Stack>
+              {/* PanelLayout: パネル配置のレンダリング */}
+              {/*
+               * PanelLayout: Mosaicレイアウトシステムを使用したパネル配置管理
+               * - react-mosaic-componentによる分割可能なパネル配置
+               * - 各パネルはSuspenseでラップされ遅延ローディング対応
+               * - EmptyPanelLayoutでパネル未選択時の表示制御
+               * - PanelRemounterでパネル変更時の再マウント制御
+               */}
               <PanelLayout />
             </Stack>
           </RemountOnValueChange>
-        </Sidebars>
-        {play && pause && seek && (
           <div style={{ flexShrink: 0 }}>
+            {/* PlaybackControls: 再生制御UI */}
+            {/*
+             * PlaybackControls: データ再生コントロール全体
+             * - Scrubber: 時間軸スライダーとプログレス表示
+             * - PlaybackTimeDisplay: 現在時刻表示と時間入力
+             * - PlaybackSpeedControls: 再生速度変更ドロップダウン
+             * - 再生/一時停止/シーク操作ボタン群
+             * - リピート機能とイベント作成機能
+             */}
             <PlaybackControls
-              play={play}
-              pause={pause}
-              seek={seek}
+              play={play ?? (() => {})}
+              pause={pause ?? (() => {})}
+              seek={seek ?? (() => {})}
               playUntil={playUntil}
               isPlaying={isPlaying}
               getTimeInfo={getTimeInfo}
             />
           </div>
-        )}
+        </Sidebars>
       </div>
+      {/* ダイアログ: 設定やエラー等の各種ダイアログ */}
+      {/*
+       * WorkspaceDialogs: ワークスペース関連ダイアログ群
+       * - アプリ設定ダイアログ
+       * - ファイル選択ダイアログ
+       * - エラー表示ダイアログ
+       * - 確認ダイアログ等の共通UI
+       */}
       <WorkspaceDialogs />
     </PanelStateContextProvider>
   );

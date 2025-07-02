@@ -5,6 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * AppBar: アプリケーション上部ツールバー
+ *
+ * 主な機能:
+ * - レイアウト管理 (作成/保存/読み込み)
+ * - パネル追加機能 (AddPanelMenu)
+ * - データソース表示と操作
+ * - サイドバー開閉制御 (左右)
+ * - ウィンドウ制御 (最小化/最大化/閉じる)
+ * - アプリメニューとユーザー設定
+ * - メモリ使用量インジケータ
+ */
+
 import {
   ChevronDown12Regular,
   PanelLeft24Filled,

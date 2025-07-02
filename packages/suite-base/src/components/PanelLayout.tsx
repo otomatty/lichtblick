@@ -14,6 +14,17 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * PanelLayout: Mosaicレイアウトシステムによるパネル配置管理
+ *
+ * 主な機能:
+ * - react-mosaic-componentを使用した分割可能なパネル配置
+ * - 各パネルはSuspenseでラップされ遅延ローディングに対応
+ * - EmptyPanelLayoutでパネル未選択時の表示制御
+ * - PanelRemounterでパネル変更時の再マウント制御
+ * - TabMosaicWrapperでタブ内のドロップ処理
+ */
+
 import { CircularProgress } from "@mui/material";
 import React, { PropsWithChildren, Suspense, useCallback, useMemo } from "react";
 import { useDrop } from "react-dnd";

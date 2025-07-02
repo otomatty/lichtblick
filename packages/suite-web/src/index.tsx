@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/
+// このソースコードは Mozilla Public License, v. 2.0 の条件の下で提供されます。
+// このファイルと共にMPLのコピーが配布されていない場合は、
+// http://mozilla.org/MPL/2.0/ で入手できます。
 
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
@@ -19,8 +19,8 @@ const log = Logger.getLogger(__filename);
 
 function LogAfterRender(props: React.PropsWithChildren): React.JSX.Element {
   useEffect(() => {
-    // Integration tests look for this console log to indicate the app has rendered once
-    // We use console.debug to bypass our logging library which hides some log levels in prod builds
+    // 統合テストはこのコンソールログを監視してアプリが一度レンダリングされたことを確認します
+    // プロダクションビルドで一部のログレベルを隠すログライブラリを迂回するためconsole.debugを使用します
     console.debug("App rendered");
   }, []);
   return <>{props.children}</>;
@@ -67,13 +67,13 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     return;
   }
 
-  // Use an async import to delay loading the majority of suite-base code until the CompatibilityBanner
-  // can be displayed.
+  // CompatibilityBannerが表示されるまでsuite-baseコードの大部分の読み込みを遅延させるため、
+  // 非同期インポートを使用します。
   const { installDevtoolsFormatters, overwriteFetch, waitForFonts, initI18n, StudioApp } =
     await import("@lichtblick/suite-base");
   installDevtoolsFormatters();
   overwriteFetch();
-  // consider moving waitForFonts into App to display an app loading screen
+  // アプリローディング画面を表示するため、waitForFontsをApp内に移動することを検討してください
   await waitForFonts();
   await initI18n();
 
