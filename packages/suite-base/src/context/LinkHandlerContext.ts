@@ -6,8 +6,28 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { createContext } from "react";
 
-// This context provides a function that handles link clicks, for example to handle app-internal
-// links by showing a modal dialog rather than actualy navigating.
+/**
+ * ## LinkHandlerContext
+ *
+ * **リンククリック処理のContext**
+ *
+ * ### 概要
+ * - リンククリック時のカスタム処理を提供
+ * - アプリ内リンクのモーダル表示などに使用
+ * - 外部ナビゲーションの代替手段
+ *
+ * ### 使用例
+ * ```typescript
+ * const linkHandler = useContext(LinkHandlerContext);
+ *
+ * const handleClick = (event: React.MouseEvent) => {
+ *   linkHandler(event, "https://example.com");
+ * };
+ * ```
+ *
+ * @param event - マウスクリックイベント
+ * @param href - リンクURL
+ */
 const LinkHandlerContext = createContext<(event: React.MouseEvent, href: string) => void>(() => {});
 LinkHandlerContext.displayName = "LinkHandlerContext";
 

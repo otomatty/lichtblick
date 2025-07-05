@@ -23,40 +23,55 @@ import { TimelinePositionedEvent } from "@lichtblick/suite-base/context/EventsCo
 import type { HoverValue } from "@lichtblick/suite-base/types/hoverValue";
 
 /**
- * Represents the global bounds to which synced plots conform, including the id of the
- * component that set those bounds.
+ * 同期範囲設定
+ *
+ * 同期されたプロット間で共有されるグローバル範囲を表現します。
+ * その範囲を設定したコンポーネントのIDも含まれます。
  */
 export type SyncBounds = {
+  /** 最小値 */
   min: number;
+  /** 最大値 */
   max: number;
+  /** この範囲を設定したコンポーネントのID */
   sourceId: string;
+  /** ユーザーの直接的な操作によるものかどうか */
   userInteraction: boolean;
 };
 
 /**
- * The TimelineInteractionStateStore manages state related to dynamic user interactions with data in the app.
- * Things like the hovered time value and global bounds for plots are managed here.
+ * TimelineInteractionStateStore - タイムライン相互作用状態管理
+ *
+ * このストアは、アプリケーション内でのデータとの動的なユーザー相互作用に
+ * 関連する状態を管理します。ホバー時間値やプロットのグローバル範囲などが
+ * ここで管理されます。
+ *
+ * 主な責任:
+ * - ホバー状態の管理（時間値、イベント）
+ * - 同期プロットのグローバル範囲管理
+ * - タイムライン上でのイベント表示管理
+ * - コンポーネント間の相互作用調整
  */
 export type TimelineInteractionStateStore = Immutable<{
-  /** The events overlapping the current hover time, if any. */
+  /** 現在のホバー時間と重複するイベント（存在する場合） */
   eventsAtHoverValue: Record<string, TimelinePositionedEvent>;
 
-  /** Shared time bounds for synced plots, if any. */
+  /** 同期プロットの共有時間範囲（存在する場合） */
   globalBounds: undefined | SyncBounds;
 
-  /** The event directly hovered over by the user, if any. */
+  /** ユーザーが直接ホバーしているイベント（存在する場合） */
   hoveredEvent: undefined | TimelinePositionedEvent;
 
-  /** The point in time hovered over by the user. */
+  /** ユーザーがホバーしている時間ポイント */
   hoverValue: undefined | HoverValue;
 
-  /** Clears the current hover value. */
+  /** 現在のホバー値をクリアする */
   clearHoverValue: (componentId: string) => void;
 
-  /** Sets the events overlapping the current hover time. */
+  /** 現在のホバー時間と重複するイベントを設定する */
   setEventsAtHoverValue: (events: TimelinePositionedEvent[]) => void;
 
-  /** Sets new global bounds. */
+  /** 新しいグローバル範囲を設定する */
   setGlobalBounds: (
     newBounds:
       | undefined
@@ -64,18 +79,37 @@ export type TimelineInteractionStateStore = Immutable<{
       | ((oldValue: undefined | SyncBounds) => undefined | SyncBounds),
   ) => void;
 
-  /** Sets or clears the directly hovered event. */
+  /** 直接ホバーされているイベントを設定またはクリアする */
   setHoveredEvent: (hoveredEvent: undefined | TimelinePositionedEvent) => void;
 
-  /** Sets the new hover value. */
+  /** 新しいホバー値を設定する */
   setHoverValue: (value: HoverValue) => void;
 }>;
 
+/**
+ * TimelineInteractionStateContext - タイムライン相互作用状態コンテキスト
+ *
+ * Zustandストアを使用してタイムライン相互作用状態を管理するコンテキスト
+ */
 export const TimelineInteractionStateContext = createContext<
   undefined | StoreApi<TimelineInteractionStateStore>
 >(undefined);
+
 const selectClearHoverValue = (store: TimelineInteractionStateStore) => store.clearHoverValue;
 
+/**
+ * useClearHoverValue - ホバー値クリア関数を取得するカスタムフック
+ *
+ * @returns ホバー値をクリアする関数
+ *
+ * 使用例:
+ * ```typescript
+ * const clearHoverValue = useClearHoverValue();
+ * const handleMouseLeave = () => {
+ *   clearHoverValue("my-component-id");
+ * };
+ * ```
+ */
 export function useClearHoverValue(): TimelineInteractionStateStore["clearHoverValue"] {
   return useTimelineInteractionState(selectClearHoverValue);
 }
@@ -84,6 +118,23 @@ const selectSetHoverValue = (store: TimelineInteractionStateStore) => {
   return store.setHoverValue;
 };
 
+/**
+ * useSetHoverValue - ホバー値設定関数を取得するカスタムフック
+ *
+ * @returns ホバー値を設定する関数
+ *
+ * 使用例:
+ * ```typescript
+ * const setHoverValue = useSetHoverValue();
+ * const handleMouseMove = (time: number) => {
+ *   setHoverValue({
+ *     type: "PLAYBACK_SECONDS",
+ *     value: time,
+ *     componentId: "my-component-id"
+ *   });
+ * };
+ * ```
+ */
 export function useSetHoverValue(): TimelineInteractionStateStore["setHoverValue"] {
   return useTimelineInteractionState(selectSetHoverValue);
 }
@@ -91,14 +142,37 @@ export function useSetHoverValue(): TimelineInteractionStateStore["setHoverValue
 const undefinedSelector = () => undefined;
 
 /**
- * Select the current hover value.
+ * useHoverValue - 現在のホバー値を取得するカスタムフック
  *
- * By default this hook will return the latest hover value regardless of origin. Use options to
- * control when hover value updates cause the hook to return the updated value.
+ * デフォルトでは、このフックは発生元に関係なく最新のホバー値を返します。
+ * オプションを使用して、ホバー値の更新がフックに更新された値を返させる
+ * タイミングを制御できます。
  *
- * @param componentId allow updates from hover values to those matching this componentId. If undefined, any component's hover values are returned.
- * @param disableUpdates disable any updates regardless of origin. If set the hook will not update with hover values even if other options would cause a match.
- * @param isPlaybackSeconds allow updates from hover values for PLAYBACK_SECONDS
+ * @param opt.componentId このcomponentIdに一致するホバー値からの更新を許可。undefinedの場合、任意のコンポーネントのホバー値が返される
+ * @param opt.disableUpdates 発生元に関係なく更新を無効化。設定されている場合、他のオプションが一致を引き起こしてもホバー値で更新されない
+ * @param opt.isPlaybackSeconds PLAYBACK_SECONDSのホバー値からの更新を許可
+ * @returns HoverValue | undefined 現在のホバー値
+ *
+ * 使用例:
+ * ```typescript
+ * // 任意のコンポーネントからのホバー値を取得
+ * const hoverValue = useHoverValue();
+ *
+ * // 特定のコンポーネントからのホバー値のみを取得
+ * const myHoverValue = useHoverValue({
+ *   componentId: "my-component-id"
+ * });
+ *
+ * // 再生時間ベースのホバー値のみを取得
+ * const playbackHoverValue = useHoverValue({
+ *   isPlaybackSeconds: true
+ * });
+ *
+ * // 更新を無効化（静的な値として使用）
+ * const staticHoverValue = useHoverValue({
+ *   disableUpdates: true
+ * });
+ * ```
  */
 export function useHoverValue(opt?: {
   componentId?: string;
@@ -115,10 +189,10 @@ export function useHoverValue(opt?: {
         return undefined;
       }
       if (store.hoverValue.type === "PLAYBACK_SECONDS" && isPlaybackSeconds) {
-        // Always show playback-time hover values for timestamp-based charts.
+        // タイムスタンプベースのチャートでは常に再生時間のホバー値を表示
         return store.hoverValue;
       }
-      // Otherwise only show hover bars when hovering over the component that set the hover value
+      // それ以外の場合は、ホバー値を設定したコンポーネントにホバーしている時のみホバーバーを表示
       return componentId == undefined || store.hoverValue.componentId === componentId
         ? store.hoverValue
         : undefined;
@@ -130,8 +204,31 @@ export function useHoverValue(opt?: {
 }
 
 /**
- * This hook wraps all access to the interaction state store. Pass selectors
- * to access parts of the store.
+ * useTimelineInteractionState - タイムライン相互作用状態ストアへのアクセスフック
+ *
+ * このフックは、相互作用状態ストアへのすべてのアクセスをラップします。
+ * セレクターを渡してストアの一部にアクセスしてください。
+ *
+ * @param selector ストアから値を選択するセレクター関数
+ * @returns T セレクターが選択した値
+ *
+ * 使用例:
+ * ```typescript
+ * // グローバル範囲を取得
+ * const globalBounds = useTimelineInteractionState(
+ *   (store) => store.globalBounds
+ * );
+ *
+ * // ホバーされているイベントを取得
+ * const hoveredEvent = useTimelineInteractionState(
+ *   (store) => store.hoveredEvent
+ * );
+ *
+ * // ホバー時間でのイベントを取得
+ * const eventsAtHover = useTimelineInteractionState(
+ *   (store) => store.eventsAtHoverValue
+ * );
+ * ```
  */
 export function useTimelineInteractionState<T>(
   selector: (store: TimelineInteractionStateStore) => T,

@@ -16,14 +16,75 @@ import {
 import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/constants";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
+/**
+ * ファイルオープン機能を提供するカスタムフック
+ *
+ * ユーザーがファイルを選択してデータソースとして開くための
+ * 統合されたファイルオープン機能を提供します。
+ *
+ * 主な機能:
+ * - ファイルピッカーダイアログの表示
+ * - 複数ファイルの選択サポート
+ * - ファイル拡張子の検証
+ * - 適切なデータソースファクトリーの選択
+ * - エラーハンドリングとユーザー通知
+ *
+ * 制限事項:
+ * - 現在、複数ファイルはMCAP形式のみサポート
+ * - 異なる拡張子のファイルを同時に選択することはできない
+ *
+ * @param sources 利用可能なデータソースファクトリーのリスト
+ * @returns ファイルオープン処理を実行する非同期関数
+ *
+ * 使用例:
+ * ```typescript
+ * function FileMenu() {
+ *   const { availableSources } = usePlayerSelection();
+ *   const openFile = useOpenFile(availableSources);
+ *
+ *   const handleOpenFile = async () => {
+ *     try {
+ *       await openFile();
+ *     } catch (error) {
+ *       // エラーは内部でスナックバーに表示される
+ *       console.error('ファイルオープンエラー:', error);
+ *     }
+ *   };
+ *
+ *   return (
+ *     <button onClick={handleOpenFile}>
+ *       ファイルを開く
+ *     </button>
+ *   );
+ * }
+ * ```
+ *
+ * エラーケース:
+ * - 異なる拡張子のファイルを同時選択
+ * - サポートされていない拡張子
+ * - 複数のファクトリーが同じ拡張子をサポート
+ * - MCAP以外で複数ファイルを選択
+ */
 export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promise<void> {
   const { selectSource } = usePlayerSelection();
 
+  /**
+   * エラーメッセージを表示してエラーを投げる内部関数
+   *
+   * @param message エラーメッセージ
+   * @throws 指定されたメッセージのError
+   */
   const throwErrorAndSnackbar = (message: string): void => {
     enqueueSnackbar(message, { variant: "error" });
     throw new Error(message);
   };
 
+  /**
+   * サポートされているファイル拡張子のリストを計算
+   *
+   * 全てのデータソースファクトリーがサポートする
+   * ファイル拡張子を統合したリストを生成
+   */
   const allExtensions = useMemo(() => {
     return sources.reduce<string[]>((all, source) => {
       if (!source.supportedFileTypes) {
@@ -35,6 +96,7 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
   }, [sources]);
 
   return useCallback(async () => {
+    // ファイルピッカーダイアログを表示
     const filesHandle = await showOpenFilePicker({
       multiple: true,
       types: [
@@ -45,10 +107,12 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
       ],
     });
 
+    // ファイルが選択されなかった場合は何もしない
     if (filesHandle.length === 0) {
       return;
     }
 
+    // 選択されたファイルの情報を処理
     const processedFiles = await Promise.all(
       filesHandle.map(async (handle) => {
         const file = await handle.getFile();
@@ -59,6 +123,7 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
       }),
     );
 
+    // 拡張子の統一性をチェック
     const uniqueExtensions = new Set(processedFiles.map(({ extension }) => extension));
     if (uniqueExtensions.size > 1) {
       throwErrorAndSnackbar(
@@ -70,6 +135,7 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
 
     const [extension] = uniqueExtensions;
 
+    // 対応するデータソースファクトリーを検索
     const matchingSources = sources.filter(
       (source) =>
         (source.supportedFileTypes &&
@@ -78,10 +144,12 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
         false,
     );
 
+    // 対応するファクトリーが見つからない場合
     if (matchingSources.length === 0) {
       throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
     }
 
+    // 複数のファクトリーが同じ拡張子をサポートしている場合
     if (matchingSources.length > 1) {
       throwErrorAndSnackbar(
         `The file extension "${extension}" is not supported. Please select files with the following extensions: ${allExtensions.join(", ")}.`,
@@ -94,6 +162,8 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
     if (extension !== ".mcap" && processedFiles.length > 1) {
       throwErrorAndSnackbar(`The application only support multiple files for MCAP extension.`);
     }
+
+    // 選択されたファイルでデータソースを選択
     selectSource(matchingSources[0]!.id, {
       type: "file",
       handles: filesHandle,

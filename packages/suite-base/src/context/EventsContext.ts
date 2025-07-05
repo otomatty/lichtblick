@@ -14,80 +14,139 @@ import { Time } from "@lichtblick/rostime";
 import { Immutable } from "@lichtblick/suite";
 
 /**
- * DataSourceEvent representings a single event within a data source.
+ * データソースイベント
+ *
+ * データソース内の単一のイベントを表現します。
+ * 時系列データの中で特定の時間範囲に関連付けられたイベントを管理します。
  */
 export type DataSourceEvent = {
+  /** イベントの一意識別子 */
   id: string;
+  /** イベント作成日時（ISO文字列） */
   createdAt: string;
+  /** デバイスID */
   deviceId: string;
+  /** イベント継続時間（ナノ秒） */
   durationNanos: string;
+  /** イベント終了時刻 */
   endTime: Time;
+  /** イベント終了時刻（秒） */
   endTimeInSeconds: number;
+  /** イベントメタデータ */
   metadata: Record<string, string>;
+  /** イベント開始時刻 */
   startTime: Time;
+  /** イベント開始時刻（秒） */
   startTimeInSeconds: number;
+  /** イベントタイムスタンプ（ナノ秒） */
   timestampNanos: string;
+  /** イベント更新日時（ISO文字列） */
   updatedAt: string;
 };
 
 /**
- * Represents an event including its fractional position on the timeline.
+ * タイムライン上の位置情報付きイベント
+ *
+ * タイムライン上での相対位置情報を含むイベントを表現します。
+ * 可視化やユーザーインタラクションで使用されます。
  */
 export type TimelinePositionedEvent = {
-  /** The event. */
+  /** イベントデータ */
   event: DataSourceEvent;
 
-  /** The end position of the event, as a value 0-1 relative to the timeline. */
+  /** イベントの終了位置（タイムラインに対する0-1の相対値） */
   endPosition: number;
 
-  /** The start position of the event, as a value 0-1 relative to the timeline. */
+  /** イベントの開始位置（タイムラインに対する0-1の相対値） */
   startPosition: number;
 
-  /** The time, in seconds, relative to the start of the timeline. */
+  /** タイムライン開始からの経過時間（秒） */
   secondsSinceStart: number;
 };
 
+/**
+ * EventsStore - イベント管理のZustandストア
+ *
+ * アプリケーション全体のイベント状態を管理します。
+ * イベントの取得、フィルタリング、選択などの機能を提供します。
+ *
+ * 主な責任:
+ * - イベントデータの取得と管理
+ * - イベントフィルタリング
+ * - イベント選択状態の管理
+ * - デバイス管理
+ * - イベントサポート状態の管理
+ */
 export type EventsStore = Immutable<{
-  /** Used to signal event refreshes. */
+  /** イベント更新をシグナルするために使用されるカウンター */
   eventFetchCount: number;
 
-  /** Whether events are supported for the currently loaded source. */
+  /** 現在読み込まれているソースでイベントがサポートされているかどうか */
   eventsSupported: boolean;
 
-  /** Fetched events for this session. */
+  /** このセッションで取得されたイベント */
   events: AsyncState<TimelinePositionedEvent[]>;
 
-  /** The current event filter expression. */
+  /** 現在のイベントフィルター式 */
   filter: string;
 
-  /** The currently selected event, if any. */
+  /** 現在選択されているイベント（存在する場合） */
   selectedEventId: undefined | string;
 
-  /** The active device under which new events should be created. */
+  /** 新しいイベントを作成する際のアクティブなデバイス */
   deviceId: string | undefined;
 
-  /** Refreshes events from api. */
+  /** APIからイベントを更新する */
   refreshEvents: () => void;
 
-  /** Select an event by id or clear the selection. */
+  /** IDでイベントを選択するか、選択をクリアする */
   selectEvent: (id: undefined | string) => void;
 
-  /** Set the fetched events. */
+  /** 取得したイベントを設定する */
   setEvents: (events: AsyncState<TimelinePositionedEvent[]>) => void;
 
-  /** Set the flag indicating support for events. */
+  /** イベントのサポートを示すフラグを設定する */
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
   setEventsSupported: (supported: boolean) => void;
 
-  /** Update the current filter expression. */
+  /** 現在のフィルター式を更新する */
   setFilter: (filter: string) => void;
 
-  /** Set the active device. */
+  /** アクティブなデバイスを設定する */
   setDeviceId: (deviceId: string | undefined) => void;
 }>;
 
+/**
+ * EventsContext - イベント管理コンテキスト
+ *
+ * Zustandストアを使用してイベント状態を管理するコンテキスト
+ */
 export const EventsContext = createContext<undefined | StoreApi<EventsStore>>(undefined);
 
+/**
+ * useEvents - イベントストアから値を取得するカスタムフック
+ *
+ * @param selector ストアから値を選択するセレクター関数
+ * @returns T セレクターが選択した値
+ *
+ * 使用例:
+ * ```typescript
+ * // 全イベントを取得
+ * const events = useEvents((store) => store.events);
+ *
+ * // 選択されたイベントIDを取得
+ * const selectedEventId = useEvents((store) => store.selectedEventId);
+ *
+ * // フィルター文字列を取得
+ * const filter = useEvents((store) => store.filter);
+ *
+ * // イベント選択アクションを取得
+ * const selectEvent = useEvents((store) => store.selectEvent);
+ * const handleEventSelect = (eventId: string) => {
+ *   selectEvent(eventId);
+ * };
+ * ```
+ */
 export function useEvents<T>(selector: (store: EventsStore) => T): T {
   const context = useGuaranteedContext(EventsContext);
   return useStore(context, selector);

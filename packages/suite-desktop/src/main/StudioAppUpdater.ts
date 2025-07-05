@@ -53,6 +53,10 @@ class StudioAppUpdater extends EventEmitter<EventTypes> {
    * Start the update process.
    */
   public start(): void {
+    // 自動更新を完全に無効にする
+    log.info("Automatic updates disabled (forked project)");
+    return;
+
     if (this.#started) {
       log.info(`StudioAppUpdater already running`);
       return;

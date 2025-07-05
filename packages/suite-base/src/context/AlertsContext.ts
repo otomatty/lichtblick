@@ -12,10 +12,25 @@ import { useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
+/**
+ * セッションアラートの型定義
+ *
+ * プレイヤーアラートと同じ構造
+ */
 export type SessionAlert = PlayerAlert;
 
+/**
+ * タグ付きアラートの型定義
+ *
+ * アラートにタグを追加して識別可能にする
+ */
 type TaggedAlert = SessionAlert & { tag: string };
 
+/**
+ * アラートContextストアの型定義
+ *
+ * アラート一覧とアクションを含む
+ */
 export type AlertsContextStore = Immutable<{
   alerts: TaggedAlert[];
   actions: {
@@ -24,12 +39,39 @@ export type AlertsContextStore = Immutable<{
   };
 }>;
 
+/**
+ * ## AlertsContext
+ *
+ * **アラート管理のContext**
+ *
+ * ### 概要
+ * - アプリケーション全体のアラート表示を管理
+ * - Zustandストアを使用した状態管理
+ * - タグベースのアラート識別
+ *
+ * ### 使用例
+ * ```typescript
+ * const actions = useAlertsActions();
+ *
+ * // アラート設定
+ * actions.setAlert("error", {
+ *   message: "エラーが発生しました",
+ *   severity: "error"
+ * });
+ *
+ * // アラート削除
+ * actions.clearAlert("error");
+ * ```
+ */
 export const AlertsContext = createContext<undefined | StoreApi<AlertsContextStore>>(undefined);
 
 AlertsContext.displayName = "AlertsContext";
 
 /**
- * Fetches values from the alerts store.
+ * アラートストアから値を取得するカスタムフック
+ *
+ * @param selector - ストアから値を選択する関数
+ * @returns T - 選択された値
  */
 export function useAlertsStore<T>(selector: (store: AlertsContextStore) => T): T {
   const context = useGuaranteedContext(AlertsContext);
@@ -39,7 +81,9 @@ export function useAlertsStore<T>(selector: (store: AlertsContextStore) => T): T
 const selectActions = (store: AlertsContextStore) => store.actions;
 
 /**
- * Convenience hook for accessing alerts store actions.
+ * アラートアクションを取得するカスタムフック
+ *
+ * @returns AlertsContextStore["actions"] - アラート操作アクション
  */
 export function useAlertsActions(): AlertsContextStore["actions"] {
   return useAlertsStore(selectActions);
