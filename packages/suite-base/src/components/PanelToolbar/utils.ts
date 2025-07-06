@@ -19,6 +19,58 @@ import { MosaicKey } from "react-mosaic-component/lib/types";
 
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
+/**
+ * **PanelToolbar Utilities** - パネルツールバーユーティリティ関数
+ *
+ * パネルツールバーコンポーネントで使用される共通のユーティリティ関数を提供します。
+ * React Mosaicレイアウトシステムとの統合に特化した機能を含みます。
+ *
+ * @utilities
+ * - **getPanelTypeFromMosaic**: MosaicからパネルタイプIDを取得
+ *
+ * @dependencies
+ * - **react-mosaic-component**: レイアウトシステム
+ * - **@lichtblick/suite-base/util/layout**: パネルID解析
+ */
+
+/**
+ * **getPanelTypeFromMosaic** - Mosaicからパネルタイプを取得
+ *
+ * React Mosaicレイアウトシステムから現在のパネルタイプを取得するユーティリティ関数。
+ * パネルのコンテキストメニューやアクションで、現在のパネルタイプを判定する際に使用されます。
+ *
+ * @algorithm
+ * 1. MosaicWindowActionsからパネルパスを取得
+ * 2. MosaicRootActionsからルートノードを取得
+ * 3. パスを使用してノードを特定
+ * 4. ノードIDからパネルタイプを抽出
+ *
+ * @safety
+ * - **引数チェック**: undefinedの場合は安全にundefinedを返す
+ * - **型検証**: 非リーフノードの場合はエラーを投げる
+ * - **エラーハンドリング**: 適切なエラーメッセージを提供
+ *
+ * @example
+ * ```tsx
+ * // パネルアクションドロップダウンでの使用例
+ * const getPanelType = useCallback(
+ *   () => getPanelTypeFromMosaic(mosaicWindowActions, mosaicActions),
+ *   [mosaicActions, mosaicWindowActions]
+ * );
+ *
+ * const handleSplit = () => {
+ *   const type = getPanelType();
+ *   if (type) {
+ *     // パネル分割処理
+ *   }
+ * };
+ * ```
+ *
+ * @param mosaicWindowActions - Mosaicウィンドウアクション（省略可能）
+ * @param mosaicActions - Mosaicルートアクション（省略可能）
+ * @returns パネルタイプ文字列、取得できない場合はundefined
+ * @throws {Error} 非リーフノードの場合にエラーを投げる
+ */
 export function getPanelTypeFromMosaic(
   mosaicWindowActions?: MosaicWindowActions,
   mosaicActions?: MosaicRootActions<MosaicKey>,

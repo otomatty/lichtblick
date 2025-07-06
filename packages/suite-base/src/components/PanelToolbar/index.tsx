@@ -28,11 +28,19 @@ import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 
 import { PanelToolbarControls } from "./PanelToolbarControls";
 
+/**
+ * PanelToolbarコンポーネントのプロパティ
+ */
 type Props = {
+  /** 追加のアイコンボタン要素 */
   additionalIcons?: React.ReactNode;
+  /** ツールバーの背景色 */
   backgroundColor?: CSSProperties["backgroundColor"];
+  /** ツールバーの子要素（通常はカスタムコンテンツ） */
   children?: React.ReactNode;
+  /** 追加のCSSクラス名 */
   className?: string;
+  /** 未知のパネルタイプかどうか */
   isUnknownPanel?: boolean;
 };
 
@@ -53,9 +61,41 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-// Panel toolbar should be added to any panel that's part of the
-// react-mosaic layout.  It adds a drag handle, remove/replace controls
-// and has a place to add custom controls via it's children property
+/**
+ * **PanelToolbar** - パネルツールバーコンポーネント
+ *
+ * react-mosaic-componentのレイアウトシステムに統合される全パネルに必要なツールバーコンポーネント。
+ * パネルのドラッグハンドル、設定ボタン、削除/置換コントロール、フルスクリーン機能を提供します。
+ *
+ * @features
+ * - **ドラッグ&ドロップ対応**: react-mosaic-componentと統合したパネル移動
+ * - **フルスクリーン機能**: パネルの全画面表示/終了
+ * - **カスタムコンテンツ**: 子要素によるカスタムツールバー内容
+ * - **パネルタイトル表示**: デフォルトまたはカスタムタイトルの表示
+ * - **アクセシビリティ**: 適切なaria属性とテストID
+ *
+ * @architecture
+ * - **PanelContext**: パネル固有の状態とアクションにアクセス
+ * - **Material-UI**: 統一されたテーマとスタイリング
+ * - **React Mosaic**: レイアウトシステムとの統合
+ *
+ * @example
+ * ```tsx
+ * // 基本的な使用方法
+ * <PanelToolbar>
+ *   <Typography>カスタムタイトル</Typography>
+ * </PanelToolbar>
+ *
+ * // 追加アイコンを含む使用方法
+ * <PanelToolbar
+ *   additionalIcons={<MyCustomIcon />}
+ *   backgroundColor="blue"
+ * />
+ * ```
+ *
+ * @param props - コンポーネントのプロパティ
+ * @returns JSX.Element - レンダリングされたツールバー
+ */
 export default React.memo<Props>(function PanelToolbar({
   additionalIcons,
   backgroundColor,

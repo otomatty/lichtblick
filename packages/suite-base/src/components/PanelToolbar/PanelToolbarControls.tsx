@@ -30,11 +30,55 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 
 import { PanelActionsDropdown } from "./PanelActionsDropdown";
 
+/**
+ * PanelToolbarControlsコンポーネントのプロパティ
+ */
 type PanelToolbarControlsProps = {
+  /** 追加のアイコンボタン要素 */
   additionalIcons?: React.ReactNode;
+  /** 未知のパネルタイプかどうか */
   isUnknownPanel: boolean;
 };
 
+/**
+ * **PanelToolbarControls** - パネルツールバーコントロール群
+ *
+ * パネルツールバーの右側に配置される制御要素群を管理するコンポーネント。
+ * 設定ボタン、追加アイコン、アクションドロップダウンを含みます。
+ *
+ * @features
+ * - **設定ボタン**: パネル設定画面へのアクセス
+ * - **追加アイコン**: カスタムアイコンボタンの配置
+ * - **アクションドロップダウン**: パネル操作メニュー
+ * - **forwardRef対応**: 親コンポーネントからのref転送
+ * - **パフォーマンス最適化**: React.memoによる再レンダリング制御
+ *
+ * @architecture
+ * - **Context統合**: パネル状態、カタログ、ワークスペースへのアクセス
+ * - **条件付きレンダリング**: パネルタイプに応じた表示制御
+ * - **Stack Layout**: 横方向の整列レイアウト
+ *
+ * @conditional_rendering
+ * - **設定ボタン**: パネルに設定がある場合、またはカスタムツールバーでない場合に表示
+ * - **追加アイコン**: propsで指定された場合のみ表示
+ * - **アクションドロップダウン**: 常に表示
+ *
+ * @example
+ * ```tsx
+ * // 基本的な使用方法
+ * <PanelToolbarControls isUnknownPanel={false} />
+ *
+ * // 追加アイコンを含む使用方法
+ * <PanelToolbarControls
+ *   additionalIcons={<CustomIcon />}
+ *   isUnknownPanel={false}
+ * />
+ * ```
+ *
+ * @param props - コンポーネントのプロパティ
+ * @param ref - DOM要素への参照
+ * @returns JSX.Element - レンダリングされたコントロール群
+ */
 const PanelToolbarControlsComponent = forwardRef<HTMLDivElement, PanelToolbarControlsProps>(
   (props, ref) => {
     const { additionalIcons, isUnknownPanel } = props;
@@ -43,18 +87,31 @@ const PanelToolbarControlsComponent = forwardRef<HTMLDivElement, PanelToolbarCon
     const { setSelectedPanelIds } = useSelectedPanels();
     const { openPanelSettings } = useWorkspaceActions();
 
+    /**
+     * パネルに設定が存在するかどうかを判定するセレクター
+     * @param store - パネル状態ストア
+     * @returns パネルに設定が存在するかどうか
+     */
     const hasSettingsSelector = useCallback(
       (store: PanelStateStore) => (panelId ? store.settingsTrees[panelId] != undefined : false),
       [panelId],
     );
 
+    /**
+     * パネル情報の取得
+     * パネルタイプに基づいてカタログから情報を取得
+     */
     const panelInfo = useMemo(
-      () => (panelType != undefined ? panelCatalog?.getPanelByType(panelType) : undefined),
+      () => (panelType != undefined ? panelCatalog.getPanelByType(panelType) : undefined),
       [panelCatalog, panelType],
     );
 
     const hasSettings = usePanelStateStore(hasSettingsSelector);
 
+    /**
+     * 設定画面を開く処理
+     * パネルを選択して設定画面を表示
+     */
     const openSettings = useCallback(async () => {
       if (panelId) {
         setSelectedPanelIds([panelId]);
@@ -82,6 +139,15 @@ const PanelToolbarControlsComponent = forwardRef<HTMLDivElement, PanelToolbarCon
 
 PanelToolbarControlsComponent.displayName = "PanelToolbarControls";
 
-// Keep controls, which don't change often, in a pure component in order to avoid re-rendering the
-// whole PanelToolbar when only children change.
+/**
+ * パフォーマンス最適化されたPanelToolbarControlsコンポーネント
+ *
+ * React.memoでラップされており、propsが変更されない限り再レンダリングを防止します。
+ * これにより、PanelToolbar全体の再レンダリングを避けることができます。
+ *
+ * @performance
+ * - **再レンダリング制御**: propsの変更時のみ再レンダリング
+ * - **子コンポーネントの安定性**: 頻繁な変更から隔離
+ * - **メモリ効率**: 不要なレンダリングサイクルを削減
+ */
 export const PanelToolbarControls = React.memo(PanelToolbarControlsComponent);

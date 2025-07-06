@@ -28,7 +28,11 @@ import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/To
 import { getPanelTypeFromMosaic } from "@lichtblick/suite-base/components/PanelToolbar/utils";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 
+/**
+ * PanelActionsDropdownコンポーネントのプロパティ
+ */
 type Props = {
+  /** 未知のパネルタイプかどうか（分割機能などを制限する） */
   isUnknownPanel: boolean;
 };
 
@@ -56,6 +60,43 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * **PanelActionsDropdown** - パネルアクションドロップダウンメニュー
+ *
+ * パネルツールバーの「...」ボタンをクリックすると表示されるアクションメニューコンポーネント。
+ * パネルの分割、フルスクリーン、削除、タイプ変更などの操作を提供します。
+ *
+ * @features
+ * - **パネル分割**: 右方向・下方向への分割
+ * - **フルスクリーン**: パネルの全画面表示
+ * - **パネル削除**: 現在のパネルを削除
+ * - **パネル変更**: サブメニューでパネルタイプを変更
+ * - **多言語対応**: react-i18nextによる国際化
+ * - **アクセシビリティ**: 適切なaria属性とキーボードナビゲーション
+ *
+ * @architecture
+ * - **React Mosaic**: レイアウトシステムとの統合
+ * - **Context API**: パネル、レイアウト、Mosaicの状態管理
+ * - **Material-UI**: 統一されたメニューコンポーネント
+ * - **Custom Hooks**: レイアウトアクションの抽象化
+ *
+ * @interactions
+ * - **メインメニュー**: クリックで開閉
+ * - **サブメニュー**: マウスホバーで開閉
+ * - **アクション実行**: クリックで各機能を実行
+ *
+ * @example
+ * ```tsx
+ * // 通常のパネル用
+ * <PanelActionsDropdown isUnknownPanel={false} />
+ *
+ * // 未知のパネル用（分割機能制限）
+ * <PanelActionsDropdown isUnknownPanel={true} />
+ * ```
+ *
+ * @param props - コンポーネントのプロパティ
+ * @returns JSX.Element - レンダリングされたドロップダウンメニュー
+ */
 function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const [menuAnchorEl, setMenuAnchorEl] = useState<undefined | HTMLElement>(undefined);
@@ -79,16 +120,28 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     [mosaicActions, mosaicWindowActions],
   );
 
+  /**
+   * メニューボタンクリック処理
+   * サブメニューを閉じてメインメニューを開く
+   */
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setSubmenuAnchorEl(undefined);
     setMenuAnchorEl(event.currentTarget);
   };
 
+  /**
+   * メニュー閉じる処理
+   * メインメニューとサブメニューを両方閉じる
+   */
   const handleMenuClose = () => {
     setSubmenuAnchorEl(undefined);
     setMenuAnchorEl(undefined);
   };
 
+  /**
+   * サブメニュークリック処理
+   * メインメニューを閉じてサブメニューを開く
+   */
   const handleSubmenuClick = (event: MouseEvent<HTMLElement>) => {
     if (subMenuAnchorEl !== event.currentTarget) {
       setSubmenuAnchorEl(event.currentTarget);
@@ -96,14 +149,25 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     setMenuAnchorEl(undefined);
   };
 
+  /**
+   * サブメニュー閉じる処理
+   */
   const handleSubmenuClose = useCallback(() => {
     setSubmenuAnchorEl(undefined);
   }, []);
 
+  /**
+   * サブメニューマウスエンター処理
+   * ホバーでサブメニューを開く
+   */
   const handleSubmenuMouseEnter = (event: MouseEvent<HTMLElement>) => {
     setSubmenuAnchorEl(event.currentTarget);
   };
 
+  /**
+   * パネル削除処理
+   * 現在のパネルをレイアウトから削除
+   */
   const close = useCallback(() => {
     closePanel({
       tabId,
@@ -113,6 +177,12 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     handleMenuClose();
   }, [closePanel, mosaicActions, mosaicWindowActions, tabId]);
 
+  /**
+   * パネル分割処理
+   * 指定された方向にパネルを分割
+   * @param id - パネルID
+   * @param direction - 分割方向（'row' | 'column'）
+   */
   const split = useCallback(
     (id: string | undefined, direction: "row" | "column") => {
       const type = getPanelType();
@@ -134,11 +204,19 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     [getCurrentLayout, getPanelType, mosaicActions, mosaicWindowActions, splitPanel, tabId],
   );
 
+  /**
+   * フルスクリーン入る処理
+   * パネルを全画面表示にする
+   */
   const enterFullscreen = useCallback(() => {
     panelContext?.enterFullscreen();
     handleMenuClose();
   }, [panelContext]);
 
+  /**
+   * メニューアイテムの動的生成
+   * パネルの状態に応じてアクションを生成
+   */
   const menuItems = useMemo(() => {
     const items = [];
 
@@ -263,4 +341,8 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   );
 }
 
+/**
+ * React.memoでラップされたPanelActionsDropdownコンポーネント
+ * パフォーマンス最適化のためmemoized
+ */
 export const PanelActionsDropdown = React.memo(PanelActionsDropdownComponent);
