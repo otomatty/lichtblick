@@ -40,6 +40,21 @@ import {
   StructureTraversalResult,
 } from "./messagePathsForDatatype";
 
+/**
+ * グローバル変数のデフォルト値を設定しようと試みる
+ *
+ * @param variableName - 設定対象の変数名
+ * @param setGlobalVariables - グローバル変数設定関数
+ * @returns デフォルト値が設定できた場合はtrue、できなかった場合はfalse
+ *
+ * @example
+ * ```typescript
+ * const success = tryToSetDefaultGlobalVar("myVar", setGlobalVariables);
+ * if (success) {
+ *   console.log("デフォルト値を設定しました");
+ * }
+ * ```
+ */
 export function tryToSetDefaultGlobalVar(
   variableName: string,
   setGlobalVariables: (arg0: GlobalVariables) => void,
@@ -53,6 +68,29 @@ export function tryToSetDefaultGlobalVar(
   return false;
 }
 
+/**
+ * ROSパスから最初の無効なグローバル変数を検索する
+ *
+ * メッセージパス内で使用されているグローバル変数のうち、
+ * 現在定義されていない最初の変数を返す。
+ *
+ * @param rosPath - 解析対象のROSメッセージパス
+ * @param globalVariables - 現在定義されているグローバル変数
+ * @param setGlobalVariables - グローバル変数設定関数
+ * @returns 無効な変数の情報（変数名と位置）、または undefined
+ *
+ * @example
+ * ```typescript
+ * const invalidVar = getFirstInvalidVariableFromRosPath(
+ *   parsedPath,
+ *   globalVariables,
+ *   setGlobalVariables
+ * );
+ * if (invalidVar) {
+ *   console.log(`無効な変数: ${invalidVar.variableName} at position ${invalidVar.loc}`);
+ * }
+ * ```
+ */
 export function getFirstInvalidVariableFromRosPath(
   rosPath: MessagePath,
   globalVariables: GlobalVariables,
@@ -83,6 +121,22 @@ export function getFirstInvalidVariableFromRosPath(
   }).find(({ variableName }) => !tryToSetDefaultGlobalVar(variableName, setGlobalVariables));
 }
 
+/**
+ * プリミティブ型の例示値を取得する
+ *
+ * 自動補完でフィルター条件を提案する際に使用される
+ * サンプル値を返す。
+ *
+ * @param primitiveType - ROSプリミティブ型
+ * @returns 型に応じた例示値の文字列表現
+ *
+ * @example
+ * ```typescript
+ * getExamplePrimitive("string") // '""'
+ * getExamplePrimitive("bool")   // "true"
+ * getExamplePrimitive("int32")  // "0"
+ * ```
+ */
 function getExamplePrimitive(primitiveType: PrimitiveType) {
   switch (primitiveType) {
     case "string":
@@ -103,19 +157,38 @@ function getExamplePrimitive(primitiveType: PrimitiveType) {
   }
 }
 
+/**
+ * MessagePathInputコンポーネントのプロパティ型定義
+ *
+ * ROSメッセージパスの入力フィールドを提供するコンポーネントの
+ * 設定オプションを定義する。
+ */
 export type MessagePathInputBaseProps = {
+  /** 数学修飾子（.@演算子）をサポートするかどうか */
   supportsMathModifiers?: boolean;
-  path: string; // A path of the form `/topic.some_field[:]{id==42}.x`
-  index?: number; // Optional index field which gets passed to `onChange` (so you don't have to create anonymous functions)
+  /** 入力されたパス文字列（例: `/topic.some_field[:]{id==42}.x`） */
+  path: string;
+  /** 複数の入力フィールドを区別するためのオプションインデックス */
+  index?: number;
+  /** パス変更時のコールバック関数 */
   onChange: (value: string, index?: number) => void;
-  validTypes?: readonly string[]; // Valid types, like "message", "array", or "primitive", or a ROS primitive like "float64"
-  noMultiSlices?: boolean; // Don't suggest slices with multiple values `[:]`, only single values like `[0]`.
+  /** 有効な型のリスト（"message", "array", "primitive"、またはROSプリミティブ型） */
+  validTypes?: readonly string[];
+  /** 複数値スライス（[:]）を無効にし、単一値（[0]）のみを許可するかどうか */
+  noMultiSlices?: boolean;
+  /** プレースホルダーテキスト */
   placeholder?: string;
+  /** 入力フィールドのカスタムスタイル */
   inputStyle?: CSSProperties;
+  /** 入力フィールドを無効にするかどうか */
   disabled?: boolean;
-  disableAutocomplete?: boolean; // Treat this as a normal input, with no autocomplete.
+  /** 自動補完を無効にして通常の入力フィールドとして扱うかどうか */
+  disableAutocomplete?: boolean;
+  /** 読み取り専用にするかどうか */
   readOnly?: boolean;
+  /** 優先されるデータ型（自動補完順序に影響） */
   prioritizedDatatype?: string;
+  /** Material-UIのTextFieldバリアント */
   variant?: TextFieldProps["variant"];
 };
 
@@ -124,22 +197,50 @@ const useStyles = makeStyles()({
 });
 
 /**
- * To show an input field with an autocomplete so the user can enter message paths, use:
+ * ROSメッセージパス入力コンポーネント
  *
- *  <MessagePathInput path={this.state.path} onChange={path => this.setState({ path })} />
+ * ROSトピックとメッセージフィールドへのパスを入力するための
+ * 自動補完機能付きの入力フィールドを提供する。
  *
- * To limit the autocomplete items to only certain types of values, you can use
+ * ## 主な機能
+ * - トピック名の自動補完
+ * - メッセージフィールドパスの自動補完
+ * - フィルター条件の自動補完
+ * - グローバル変数の自動補完
+ * - 型制約による候補の絞り込み
+ * - 数学修飾子のサポート
  *
- *  <MessagePathInput types={["message", "array", "primitives"]} />
+ * ## 自動補完の種類
+ * 1. **トピック名補完**: `/topic_name` の形式
+ * 2. **メッセージパス補完**: `.field_name[0].sub_field` の形式
+ * 3. **フィルター補完**: `{field==value}` の形式
+ * 4. **グローバル変数補完**: `$variable_name` の形式
  *
- * Or use actual ROS primitive types:
+ * @example
+ * ```typescript
+ * // 基本的な使用例
+ * <MessagePathInput
+ *   path="/robot/pose.position.x"
+ *   onChange={(path) => console.log(path)}
+ * />
  *
- *  <MessagePathInput types={["uint16", "float64"]} />
+ * // 型制約付きの使用例
+ * <MessagePathInput
+ *   path="/sensor/data"
+ *   validTypes={["primitive", "float64"]}
+ *   onChange={(path) => setSelectedPath(path)}
+ * />
  *
- * If you are rendering many input fields, you might want to use `<MessagePathInput index={5}>`,
- * which gets passed down to `<MessagePathInput onChange>` as the second parameter, so you can
- * avoid creating anonymous functions on every render (which will prevent the component from
- * rendering unnecessarily).
+ * // 複数入力フィールドでの使用例
+ * <MessagePathInput
+ *   path="/topic.field"
+ *   index={0}
+ *   onChange={(path, index) => updatePath(index, path)}
+ * />
+ * ```
+ *
+ * @param props - コンポーネントのプロパティ
+ * @returns 自動補完機能付きの入力フィールド
  */
 export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
   props: MessagePathInputBaseProps,
@@ -160,11 +261,16 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
   } = props;
   const { classes } = useStyles();
 
+  // データ型からメッセージパス構造を生成（メモ化）
   const messagePathStructuresForDataype = useMemo(
     () => messagePathStructures(datatypes),
     [datatypes],
   );
-  /** A map from each possible message path to the corresponding MessagePathStructureItem */
+
+  /**
+   * 各メッセージパスと対応するMessagePathStructureItemのマップ
+   * 自動補完候補の生成に使用される
+   */
   const allStructureItemsByPath = useMemo(
     () =>
       new Map(
@@ -182,7 +288,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
           });
           return filterMap(allPaths, (item) => {
             if (item.path === "") {
-              // Plain topic items will be added via `topicNamesAutocompleteItems`
+              // プレーントピック項目は `topicNamesAutocompleteItems` で追加される
               return undefined;
             }
             return [quoteTopicNameIfNeeded(topic.name) + item.path, item.terminatingStructureItem];
@@ -194,10 +300,16 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
 
   const onChangeProp = props.onChange;
 
+  /**
+   * 入力値変更時のハンドラー
+   *
+   * 特別な処理として、"{"文字の入力時に自動的に"}"を挿入し、
+   * フィルター条件の入力を支援する。
+   */
   const onChange = useCallback(
     (event: React.SyntheticEvent, rawValue: string) => {
-      // When typing a "{" character, also  insert a "}", so you get an
-      // autocomplete window immediately for selecting a filter name.
+      // "{"文字が入力された時、自動的に"}"を挿入して
+      // フィルター名選択のための自動補完ウィンドウを即座に表示
       let value = rawValue;
       if ((event.nativeEvent as InputEvent).data === "{") {
         const target = event.target as HTMLInputElement;
@@ -213,6 +325,12 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     [onChangeProp, props.index],
   );
 
+  /**
+   * 自動補完項目選択時のハンドラー
+   *
+   * 選択された項目に基づいて入力値を更新し、
+   * 必要に応じてカーソル位置を調整する。
+   */
   const onSelect = useCallback(
     (
       rawValue: string,
@@ -223,14 +341,14 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
       const completeStart = path.slice(0, autocompleteRange.start);
       const completeEnd = path.slice(autocompleteRange.end);
 
-      // Check if accepting this completion would result in a path to a non-complex field.
+      // この補完を受け入れると非複合フィールドへのパスになるかチェック
       const completedPath = completeStart + rawValue + completeEnd;
       const completedField = allStructureItemsByPath.get(completedPath);
       const isSimpleField =
         completedField != undefined && completedField.structureType === "primitive";
 
-      // If we're dealing with a topic name, and we cannot validly end in a message type,
-      // add a "." so the user can keep typing to autocomplete the message path.
+      // トピック名を扱っていて、メッセージ型で有効に終了できない場合、
+      // "."を追加してユーザーがメッセージパスの自動補完を続けられるようにする
       const messageIsValidType = validTypes == undefined || validTypes.includes("message");
       const keepGoingAfterTopicName =
         autocompleteType === "topicName" && !messageIsValidType && !isSimpleField;
@@ -238,10 +356,10 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
 
       onChangeProp(completeStart + value + completeEnd);
 
-      // We want to continue typing if we're dealing with a topic name,
-      // or if we just autocompleted something with a filter (because we might want to
-      // edit that filter), or if the autocomplete already has a filter (because we might
-      // have just autocompleted a name inside that filter).
+      // 以下の場合は入力を続行する:
+      // - トピック名を扱っている場合
+      // - フィルター付きの項目を補完した場合（フィルターを編集したい可能性）
+      // - 既存の自動補完にフィルターが含まれている場合
       if (keepGoingAfterTopicName || value.includes("{") || path.includes("{")) {
         const newCursorPosition = autocompleteRange.start + value.length;
         setImmediate(() => {
@@ -254,8 +372,10 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     [path, allStructureItemsByPath, validTypes, onChangeProp],
   );
 
+  // 入力パスを解析してMessagePathオブジェクトに変換
   const rosPath = useMemo(() => parseMessagePath(path), [path]);
 
+  // 解析されたパスからトピック情報を取得
   const topic = useMemo(() => {
     if (!rosPath) {
       return undefined;
@@ -265,6 +385,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     return topics.find(({ name }) => name === topicName);
   }, [rosPath, topics]);
 
+  // メッセージパスの構造走査結果を取得
   const structureTraversalResult = useMemo((): StructureTraversalResult | undefined => {
     if (!topic || !rosPath?.messagePath) {
       return undefined;
@@ -287,6 +408,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     );
   }, [messagePathStructuresForDataype, rosPath?.messagePath, topic]);
 
+  // 無効なグローバル変数を検索
   const invalidGlobalVariablesVariable = useMemo(() => {
     if (!rosPath) {
       return undefined;
@@ -294,16 +416,19 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     return getFirstInvalidVariableFromRosPath(rosPath, globalVariables, setGlobalVariables);
   }, [globalVariables, rosPath, setGlobalVariables]);
 
+  // トピック名の自動補完候補を生成
   const topicNamesAutocompleteItems = useMemo(
     () => topics.map(({ name }) => quoteTopicNameIfNeeded(name)),
     [topics],
   );
 
+  // トピック名とフィールドパスの自動補完候補を生成
   const topicNamesAndFieldsAutocompleteItems = useMemo(
     () => topicNamesAutocompleteItems.concat(Array.from(allStructureItemsByPath.keys())),
     [allStructureItemsByPath, topicNamesAutocompleteItems],
   );
 
+  // 現在の自動補完タイプを決定
   const autocompleteType = useMemo(() => {
     if (!rosPath) {
       return "topicName";
@@ -326,6 +451,12 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
 
   const structures = useMemo(() => messagePathStructures(datatypes), [datatypes]);
 
+  /**
+   * 自動補完候補とその関連情報を生成
+   *
+   * 現在の入力状態に基づいて適切な自動補完候補を決定し、
+   * フィルターテキストと置換範囲を計算する。
+   */
   const { autocompleteItems, autocompleteFilterText, autocompleteRange } = useMemo(() => {
     if (disableAutocomplete) {
       return {
@@ -334,8 +465,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
         autocompleteRange: { start: 0, end: Infinity },
       };
     } else if (autocompleteType === "topicName") {
-      // If the path is empty, return topic names only to show the full list of topics. Otherwise,
-      // use the full set of topic names and field paths to autocomplete
+      // パスが空の場合はトピック名のみを表示し、そうでなければ
+      // トピック名とフィールドパスの全セットを自動補完に使用
       return {
         autocompleteItems: path
           ? topicNamesAndFieldsAutocompleteItems
@@ -354,8 +485,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
 
         const items: string[] = [];
 
-        // Provide filter suggestions for primitive values, since they're the only kinds of values
-        // that can be filtered on.
+        // プリミティブ値のフィルター提案を提供
+        // （フィルタリング可能な値の種類はプリミティブのみ）
         for (const name of Object.keys(structureTraversalResult.structureItem.nextByName)) {
           const item = structureTraversalResult.structureItem.nextByName[name];
           if (item?.structureType === "primitive") {
@@ -376,8 +507,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
           },
         };
       } else {
-        // Exclude any initial filters ("/topic{foo=='bar'}") from the range that will be replaced
-        // when the user chooses a new message path.
+        // 初期フィルター（"/topic{foo=='bar'}"）を、ユーザーが新しい
+        // メッセージパスを選択した際に置換される範囲から除外
         const initialFilterLength =
           rosPath.messagePath[0]?.type === "filter" ? rosPath.messagePath[0].repr.length + 2 : 0;
 
@@ -400,11 +531,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
             start: rosPath.topicNameRepr.length + initialFilterLength,
             end: Infinity,
           },
-          // Filter out filters (hah!) in a pretty crude way, so autocomplete still works
-          // when already having specified a filter and you want to see what other object
-          // names you can complete it with. Kind of an edge case, and this doesn't work
-          // ideally (because it will remove your existing filter if you actually select
-          // the autocomplete item), but it's easy to do for now, and nice to have.
+          // フィルターを粗い方法で除外し、既にフィルターを指定している場合でも
+          // 自動補完が機能するようにする。エッジケースだが、実装が簡単で便利
           autocompleteFilterText: path
             .substring(rosPath.topicNameRepr.length)
             .replace(/\{[^}]*\}/g, ""),
@@ -445,8 +573,10 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     globalVariables,
   ]);
 
+  // トピック名でインデックス化されたトピック情報
   const topicsByName = useMemo(() => _.keyBy(topics, ({ name }) => name), [topics]);
 
+  // 優先データ型に基づいて自動補完候補を並び替え
   const orderedAutocompleteItems = useMemo(() => {
     if (prioritizedDatatype == undefined) {
       return autocompleteItems;
@@ -460,9 +590,11 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     );
   }, [autocompleteItems, prioritizedDatatype, topicsByName]);
 
+  // サポートされていない数学修飾子の使用をチェック
   const usesUnsupportedMathModifier =
     (supportsMathModifiers == undefined || !supportsMathModifiers) && path.includes(".@");
 
+  // エラー状態を判定
   const hasError =
     usesUnsupportedMathModifier ||
     (autocompleteType != undefined && !disableAutocomplete && path.length > 0);
@@ -484,8 +616,9 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
       placeholder={
         placeholder != undefined && placeholder !== "" ? placeholder : "/some/topic.msgs[0].field"
       }
-      inputStyle={inputStyle} // Disable autoselect since people often construct complex queries, and it's very annoying
-      // to have the entire input selected whenever you want to make a change to a part it.
+      inputStyle={inputStyle}
+      // 複雑なクエリを構築する際に、変更したい部分に対して
+      // 入力全体が選択されるのは非常に迷惑なので、自動選択を無効化
       disableAutoSelect
     />
   );

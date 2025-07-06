@@ -14,6 +14,169 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * TimeBasedChart - 高度な時系列チャートコンポーネント
+ *
+ * このコンポーネントは、Lichtblickアプリケーションの中核となる
+ * 時系列データ可視化システムです。Chart.jsをベースに、
+ * 高度なズーム・パン機能、データダウンサンプリング、
+ * リアルタイム同期機能を提供します。
+ *
+ * ## 主要な機能
+ *
+ * ### 1. 高度なデータ管理
+ * - **データプロバイダー**: 動的データ取得・更新
+ * - **ダウンサンプリング**: 大量データの効率的描画
+ * - **型付きデータ**: TypeScript完全対応
+ * - **境界管理**: 自動的なデータ範囲計算
+ *
+ * ### 2. インタラクション機能
+ * - **ズーム・パン**: マウス・キーボード操作対応
+ * - **ホバー同期**: 複数チャート間の連動
+ * - **プレイバック同期**: 時間軸の統一制御
+ * - **カスタムツールチップ**: 詳細なデータ表示
+ *
+ * ### 3. パフォーマンス最適化
+ * - **WebWorkerダウンサンプリング**: UIブロッキング回避
+ * - **リクエストID管理**: 不要な処理のキャンセル
+ * - **メモ化**: 重複計算の回避
+ * - **条件付きレンダリング**: 必要な部分のみ更新
+ *
+ * ### 4. 柔軟なカスタマイズ
+ * - **プラグインシステム**: Chart.jsプラグイン対応
+ * - **カスタムアノテーション**: 線・領域・ポイント描画
+ * - **スタイリング**: Material-UIテーマ連動
+ * - **レスポンシブ**: 動的サイズ調整
+ *
+ * ## アーキテクチャ
+ *
+ * ### データフロー
+ * ```
+ * データソース
+ *     ↓
+ * DataProvider (useProvider)
+ *     ↓
+ * Downsampler (useDownsampler)
+ *     ↓
+ * Chart.js (ChartComponent)
+ *     ↓
+ * ユーザーインターフェース
+ * ```
+ *
+ * ### 状態管理
+ * - **ローカル状態**: viewportBounds, datasetBounds
+ * - **グローバル状態**: TimelineInteractionState
+ * - **プロバイダー状態**: useProvider, useDownsampler
+ * - **Chart.js状態**: scales, annotations, plugins
+ *
+ * ## 使用例
+ *
+ * ### 基本的な使用
+ * ```tsx
+ * <TimeBasedChart
+ *   type="scatter"
+ *   width={800}
+ *   height={400}
+ *   zoom={true}
+ *   data={chartData}
+ *   xAxisIsPlaybackTime={true}
+ *   showXAxisLabels={true}
+ *   yAxes={yAxisConfig}
+ * />
+ * ```
+ *
+ * ### データプロバイダー使用
+ * ```tsx
+ * <TimeBasedChart
+ *   type="scatter"
+ *   width={800}
+ *   height={400}
+ *   zoom={true}
+ *   provider={dataProvider}
+ *   xAxisIsPlaybackTime={true}
+ *   showXAxisLabels={true}
+ *   yAxes={yAxisConfig}
+ * />
+ * ```
+ *
+ * ### 高度な設定
+ * ```tsx
+ * <TimeBasedChart
+ *   type="scatter"
+ *   width={800}
+ *   height={400}
+ *   zoom={true}
+ *   typedProvider={typedDataProvider}
+ *   annotations={customAnnotations}
+ *   plugins={customPlugins}
+ *   defaultView={{ type: "following", width: 30 }}
+ *   isSynced={true}
+ *   xAxisIsPlaybackTime={true}
+ *   showXAxisLabels={true}
+ *   yAxes={yAxisConfig}
+ * />
+ * ```
+ *
+ * ## Props詳細
+ *
+ * ### 必須Props
+ * - `type`: チャートタイプ（現在は"scatter"のみ）
+ * - `width`/`height`: チャートサイズ
+ * - `zoom`: ズーム機能の有効化
+ * - `yAxes`: Y軸設定
+ * - `xAxisIsPlaybackTime`: X軸が再生時間かどうか
+ * - `showXAxisLabels`: X軸ラベル表示
+ *
+ * ### データ関連Props
+ * - `data`/`typedData`: 静的データ
+ * - `provider`/`typedProvider`: 動的データプロバイダー
+ * - `dataBounds`: データ境界（オプション）
+ * - `tooltips`: カスタムツールチップデータ
+ *
+ * ### 表示・動作制御Props
+ * - `isSynced`: 複数チャート同期
+ * - `linesToHide`: 非表示ライン設定
+ * - `interactionMode`: インタラクションモード
+ * - `currentTime`: 現在時刻（プレイバック用）
+ * - `defaultView`: デフォルト表示範囲
+ *
+ * ## 内部実装の特徴
+ *
+ * ### パフォーマンス最適化
+ * - リクエストIDによる非同期処理管理
+ * - useMemoによる重複計算回避
+ * - 条件付きエフェクトによる不要な更新防止
+ * - WebWorkerダウンサンプリング
+ *
+ * ### 状態同期
+ * - TimelineInteractionStateContextとの連携
+ * - グローバル境界の自動更新
+ * - ホバー状態の複数チャート同期
+ * - プレイバック時間の統一管理
+ *
+ * ### エラーハンドリング
+ * - データ境界の安全な初期化
+ * - 非同期処理のキャンセル
+ * - Chart.jsエラーの適切な処理
+ * - フォールバック値の提供
+ *
+ * ## 関連コンポーネント
+ *
+ * - `ChartComponent` - Chart.jsラッパー
+ * - `HoverBar` - ホバー位置表示
+ * - `VerticalBarWrapper` - 垂直線表示
+ * - `TimeBasedChartTooltipContent` - ツールチップ内容
+ * - `KeyListener` - キーボード操作
+ *
+ * ## 注意事項
+ *
+ * - 大量データ使用時はダウンサンプリングを有効化
+ * - xAxisIsPlaybackTimeは時間軸同期に必須
+ * - プロバイダーと静的データは排他的に使用
+ * - メモリリークを避けるため適切なクリーンアップが必要
+ * - Chart.jsのバージョン互換性に注意
+ */
+
 import { Button, Fade, Tooltip, buttonClasses } from "@mui/material";
 import { ChartOptions, InteractionMode, ScaleOptions } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
@@ -100,47 +263,81 @@ type ChartComponentProps = ComponentProps<typeof ChartComponent>;
 const selectGlobalBounds = (store: TimelineInteractionStateStore) => store.globalBounds;
 const selectSetGlobalBounds = (store: TimelineInteractionStateStore) => store.setGlobalBounds;
 
-// Calculation mode for the "reset view" view.
+/**
+ * ChartDefaultView - チャートのデフォルト表示設定
+ *
+ * "reset view"機能で使用される表示モードの計算設定
+ */
 type ChartDefaultView =
   | { type: "fixed"; minXValue: number; maxXValue: number }
   | { type: "following"; width: number };
 
+/**
+ * Props - TimeBasedChartコンポーネントのプロパティ定義
+ *
+ * 高度な時系列チャートの全機能を制御するための包括的なプロパティセット
+ */
 export type Props = {
+  /** チャートタイプ（現在は"scatter"のみサポート） */
   type: "scatter";
+  /** チャートの幅（ピクセル） */
   width: number;
+  /** チャートの高さ（ピクセル） */
   height: number;
+  /** ズーム機能の有効化 */
   zoom: boolean;
+  /** 静的チャートデータ（providerと排他的） */
   data?: ChartComponentProps["data"];
+  /** 動的データプロバイダー（オブジェクト形式） */
   provider?: ObjectDataProvider;
+  /** 静的型付きチャートデータ（typedProviderと排他的） */
   typedData?: ChartComponentProps["typedData"];
+  /** 動的データプロバイダー（型付き形式） */
   typedProvider?: TypedDataProvider;
+  /** データ境界の明示的指定 */
   dataBounds?: Bounds;
+  /** カスタムツールチップデータ */
   tooltips?: Map<string, TimeBasedChartTooltipData>;
+  /** X軸設定 */
   xAxes?: ScaleOptions<"linear">;
+  /** Y軸設定（必須） */
   yAxes: ScaleOptions<"linear">;
+  /** Chart.jsアノテーション設定 */
   annotations?: AnnotationOptions[];
+  /** リセットボタンの下部パディング */
   resetButtonPaddingBottom?: number;
+  /** 複数チャート同期の有効化 */
   isSynced?: boolean;
+  /** 非表示ライン設定 */
   linesToHide?: {
     [key: string]: boolean;
   };
+  /** Chart.jsインタラクションモード */
   interactionMode?: InteractionMode;
+  /** データセットID（識別用） */
   datasetId?: string;
+  /** クリックイベントハンドラー */
   onClick?: ChartComponentProps["onClick"];
-  // If the x axis represents playback time ("timestamp"), the hover cursor will be synced.
-  // Note, this setting should not be used for other time values.
+  /** X軸が再生時間を表すかどうか（ホバー同期用） */
   xAxisIsPlaybackTime: boolean;
+  /** X軸ラベル表示の有効化 */
   showXAxisLabels: boolean;
+  /** Chart.jsプラグイン設定 */
   plugins?: ChartOptions["plugins"];
+  /** 現在の再生時間 */
   currentTime?: number;
+  /** デフォルト表示範囲設定 */
   defaultView?: ChartDefaultView;
 };
 
-// Create a chart with any y-axis but with an x-axis that shows time since the
-// start of the bag, and which is kept in sync with other instances of this
-// component. Uses chart.js internally, with a zoom/pan plugin, and with our
-// standard tooltips.
+/**
+ * TimeBasedChart - メインコンポーネント
+ *
+ * 時系列データの高度な可視化を提供するChart.jsベースのコンポーネント。
+ * ズーム・パン、データダウンサンプリング、リアルタイム同期機能を統合。
+ */
 export default function TimeBasedChart(props: Props): React.JSX.Element {
+  /** 非同期リクエストの管理用ID */
   const requestID = useRef<number>(0);
   const {
     currentTime,
@@ -162,6 +359,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     yAxes,
   } = props;
 
+  // データセット境界の状態管理
   const [datasetBounds, setDatasetBounds] = useState<Bounds>({
     x: {
       min: 0,
@@ -173,6 +371,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     },
   });
 
+  // ビューポート境界の状態管理
   const [viewportBounds, setViewportBounds] = useState<Bounds>({
     x: {
       min: 0,
@@ -184,6 +383,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     },
   });
 
+  // データプロバイダーに渡すビューポート情報
   const view = React.useMemo(
     () => ({
       width,
@@ -193,8 +393,10 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     [width, height, viewportBounds],
   );
 
+  // 非表示ライン設定のメモ化
   const linesToHide = useMemo(() => props.linesToHide ?? {}, [props.linesToHide]);
 
+  // ダウンサンプリング機能の初期化
   const { downsampler, setScales } = useDownsample(
     React.useMemo(
       () =>

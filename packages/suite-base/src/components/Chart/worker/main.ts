@@ -14,16 +14,37 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-// Entrypoint for chartjs worker
+/**
+ * Chart.js WebWorkerのエントリーポイント
+ *
+ * このファイルはChart.jsコンポーネント用のWebWorkerの起動点として機能します。
+ * WebWorker環境でChartJsMuxインスタンスを初期化し、メインスレッドとの
+ * RPC通信を確立します。
+ *
+ * ## 処理の流れ
+ * 1. WebWorker環境かどうかを確認
+ * 2. RPC通信チャネルを設定
+ * 3. ChartJsMuxインスタンスを作成
+ * 4. メインスレッドからのRPC要求を待機
+ *
+ * ## 技術的な注意点
+ * - 単一のwebターゲットを使用するため、globalはWindowGlobalScopeではなく
+ *   WorkerGlobalScopeを参照する必要があります
+ * - RPC通信によりメインスレッドとWebWorker間でChart.js操作を同期します
+ *
+ * @see ChartJsMux - RPC要求のルーティングと複数チャートインスタンスの管理
+ * @see ChartJSManager - 個別のChart.jsインスタンス管理
+ */
 
 import Rpc, { Channel } from "@lichtblick/suite-base/util/Rpc";
 import { inWebWorker } from "@lichtblick/suite-base/util/workers";
 
 import ChartJsMux from "./ChartJsMux";
 
+// WebWorker環境でのみ実行
 if (inWebWorker()) {
-  // Since we use a single _web_ target for our bundle, _global_ referrs to the window global
-  // rather than WorkerGlobalScope. We cast to the value we know it actually is.
+  // 単一のwebターゲットを使用するため、globalはwindowグローバルではなく
+  // WorkerGlobalScopeを参照します。実際の値にキャストします。
   // #FG-64
   new ChartJsMux(new Rpc(global as unknown as Channel));
 }

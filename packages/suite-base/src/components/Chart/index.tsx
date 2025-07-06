@@ -34,40 +34,59 @@ type PartialUpdate = Partial<ChartUpdateMessage>;
 
 const log = Logger.getLogger(__filename);
 
+/**
+ * Chart.js WebWorkerを作成するファクトリー関数
+ *
+ * @returns 新しいWebWorkerインスタンス
+ */
 function makeChartJSWorker() {
   // foxglove-depcheck-used: babel-plugin-transform-import-meta
   return new Worker(new URL("./worker/main", import.meta.url));
 }
 
+/**
+ * チャートクリック時のコールバック引数
+ */
 export type OnClickArg = {
+  /** データラベル情報（存在する場合） */
   datalabel?: unknown;
-  // x-value in scale
+  /** スケール上のX値 */
   x: number | undefined;
-  // y-value in scale
+  /** スケール上のY値 */
   y: number | undefined;
 };
 
+/**
+ * Chartコンポーネントのプロパティ
+ */
 type Props = {
+  /** チャートデータ（オブジェクト形式） */
   data?: ChartData;
+  /** チャートデータ（型付き配列形式） */
   typedData?: TypedChartData;
+  /** Chart.jsオプション */
   options: ChartOptions;
+  /** 境界リセットフラグ */
   isBoundsReset: boolean;
+  /** チャートタイプ（現在は散布図のみサポート） */
   type: "scatter";
+  /** チャートの高さ */
   height: number;
+  /** チャートの幅 */
   width: number;
+  /** チャートクリック時のコールバック */
   onClick?: (params: OnClickArg) => void;
 
-  // called when the chart scales have updated (happens for zoom/pan/reset)
+  /** チャートスケールが更新された時のコールバック */
   onScalesUpdate?: (scales: RpcScales, opt: { userInteraction: boolean }) => void;
 
-  // called when the chart is about to start rendering new data
+  /** チャートが新しいデータのレンダリングを開始する時のコールバック */
   onStartRender?: () => void;
 
-  // called when the chart has finished updating with new data
+  /** チャートが新しいデータの更新を完了した時のコールバック */
   onFinishRender?: () => void;
 
-  // called when a user hovers over an element
-  // uses the chart.options.hover configuration
+  /** ユーザーが要素にホバーした時のコールバック */
   onHover?: (elements: RpcElement[]) => void;
 };
 
@@ -75,7 +94,12 @@ const devicePixelRatio = mightActuallyBePartial(window).devicePixelRatio ?? 1;
 
 const webWorkerManager = new WebWorkerManager(makeChartJSWorker, 4);
 
-// turn a React.MouseEvent into an object we can send over rpc
+/**
+ * React.MouseEventをRPC通信可能なオブジェクトに変換
+ *
+ * @param event - Reactマウスイベント
+ * @returns RPC通信用のマウスイベントオブジェクト
+ */
 function rpcMouseEvent(event: React.MouseEvent<HTMLElement>) {
   const boundingRect = event.currentTarget.getBoundingClientRect();
 
@@ -95,8 +119,29 @@ type RpcSend = <T>(
   transferables?: Transferable[],
 ) => Promise<T>;
 
-// Chart component renders data using workers with chartjs offscreen canvas
-
+/**
+ * Chartコンポーネント
+ *
+ * 高性能なChart.jsベースのチャートコンポーネントです。
+ * WebWorkerとOffscreenCanvasを使用してメインスレッドをブロックせずに
+ * 大量のデータを効率的に描画します。
+ *
+ * ## 主な機能
+ * - WebWorkerでの非同期レンダリング
+ * - OffscreenCanvas対応（対応ブラウザの場合）
+ * - 高解像度ディスプレイ対応
+ * - ズーム・パン操作
+ * - 型付き配列による高速データ処理
+ * - リアルタイムデータ更新
+ *
+ * ## アーキテクチャ
+ * - メインスレッド: React UI、イベントハンドリング
+ * - WebWorker: Chart.js実行、Canvas描画
+ * - RPC通信: スレッド間のデータ転送
+ *
+ * @param props - コンポーネントプロパティ
+ * @returns React JSX要素
+ */
 const supportsOffscreenCanvas =
   typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
 

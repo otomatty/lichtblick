@@ -5,6 +5,79 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * @fileoverview MessagePipelineストア - データ処理パイプラインの状態管理システム
+ *
+ * このファイルは、MessagePipelineの中核となる状態管理システムを実装している。
+ * Zustandベースの高性能ストアにより、パネル間のサブスクリプション統合、
+ * メッセージ配信、Player統合、アセット管理を効率的に処理する重要なシステム。
+ *
+ * ## アーキテクチャ概要
+ *
+ * ### 1. 状態管理設計
+ * - **Zustandストア**: 高性能な状態管理とセレクター最適化
+ * - **Immutable設計**: React最適化と予期しない変更の防止
+ * - **アクション駆動**: Redux様のアクション駆動状態更新
+ * - **メモリ効率**: 大容量データの効率的な処理
+ *
+ * ### 2. データフロー設計
+ * ```
+ * Panel.setSubscriptions() → updateSubscriberAction → mergeSubscriptions
+ *                                                              ↓
+ * Player.listener() → updatePlayerStateAction → messagesBySubscriberId
+ * ```
+ *
+ * ### 3. パフォーマンス最適化戦略
+ * - **サブスクリプションメモ化**: 重複購読の最適化
+ * - **メッセージバケッティング**: 購読者別の効率的な配信
+ * - **参照等価性保持**: 不要な再レンダリング防止
+ * - **最後メッセージキャッシュ**: 新規購読者への即座の配信
+ *
+ * ## 主要機能
+ *
+ * ### サブスクリプション統合システム
+ * - パネル別サブスクリプションの動的管理
+ * - 重複購読の自動最適化
+ * - 新規トピック購読時の最後メッセージ配信
+ * - 購読解除時のクリーンアップ処理
+ *
+ * ### メッセージ配信システム
+ * - 購読者別メッセージバケッティング
+ * - トピック別購読者マッピング
+ * - 最後メッセージキャッシュ管理
+ * - 効率的なメッセージルーティング
+ *
+ * ### Player統合システム
+ * - 複数Playerタイプの統一インターフェース
+ * - 機能別API動的バインディング
+ * - アセット取得とプロトコル対応
+ * - エラーハンドリングとフォールバック
+ *
+ * ### フレーム制御システム
+ * - pauseFrame機能による非同期制御
+ * - Condvar基盤の効率的な待機
+ * - パネル処理時間の動的調整
+ * - フレームレート最適化
+ *
+ * ## 設計思想
+ *
+ * ### 1. 高性能データ処理
+ * 大容量ROSデータのリアルタイム処理に対応するため、
+ * メモリ効率とCPU効率を最優先に設計
+ *
+ * ### 2. 拡張性
+ * 新しいPlayerタイプやパネル機能に対応可能な
+ * 柔軟なアーキテクチャ設計
+ *
+ * ### 3. 型安全性
+ * TypeScriptによる厳密な型定義と
+ * 実行時エラーの防止
+ *
+ * @see {@link ./types.ts} - 型定義の詳細
+ * @see {@link ./index.tsx} - Provider実装
+ * @see {@link ./subscriptions.ts} - サブスクリプション管理
+ */
+
 import * as _ from "lodash-es";
 import { MutableRefObject } from "react";
 import shallowequal from "shallowequal";
@@ -29,10 +102,30 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { FramePromise } from "./pauseFrameForPromise";
 import { MessagePipelineContext } from "./types";
 
+/**
+ * デフォルトPlayerState生成関数
+ *
+ * Playerが存在しない状態、または初期化中の状態に対応する
+ * デフォルトのPlayerStateを生成する。
+ *
+ * @param player - Playerインスタンス（オプショナル）
+ * @returns デフォルトのPlayerState
+ *
+ * @example
+ * ```ts
+ * // Playerが存在しない場合
+ * const state = defaultPlayerState(); // presence: NOT_PRESENT
+ *
+ * // Playerが存在する場合（初期化中として扱う）
+ * const state = defaultPlayerState(player); // presence: INITIALIZING
+ * ```
+ */
 export function defaultPlayerState(player?: Player): PlayerState {
   return {
-    // when there is a player we default to initializing, to prevent thrashing in the UI when
-    // the player is initialized.
+    /**
+     * Playerが存在する場合は初期化中に設定し、
+     * UIでの状態変化によるちらつきを防ぐ
+     */
     presence: player ? PlayerPresence.INITIALIZING : PlayerPresence.NOT_PRESENT,
     progress: {},
     capabilities: [],
@@ -42,61 +135,182 @@ export function defaultPlayerState(player?: Player): PlayerState {
   };
 }
 
+/**
+ * MessagePipeline内部状態型定義
+ *
+ * MessagePipelineストアの内部状態を定義する。
+ * 公開状態（public）と内部状態の両方を管理し、
+ * 効率的なデータ処理とパネル間連携を実現する。
+ */
 export type MessagePipelineInternalState = {
+  /**
+   * アクション実行関数
+   * 状態更新のためのアクションを実行する
+   */
   dispatch: (action: MessagePipelineStateAction) => void;
 
-  /** Reset public and private state back to initial empty values */
+  /**
+   * 状態リセット関数
+   * 公開・内部状態を初期空値に戻す
+   * Player変更時やエラー回復時に使用
+   */
   reset: () => void;
 
+  /**
+   * 現在のPlayerインスタンス（オプショナル）
+   * データソースとの接続を管理
+   */
   player?: Player;
 
-  /** used to keep track of whether we need to update public.startPlayback/playUntil/etc. */
-  lastCapabilities: string[];
-  /** Preserves reference equality of subscriptions to minimize player subscription churn. */
-  subscriptionMemoizer: (sub: SubscribePayload) => SubscribePayload;
-  subscriptionsById: Map<string, Immutable<SubscribePayload[]>>;
-  publishersById: { [key: string]: AdvertiseOptions[] };
-  allPublishers: AdvertiseOptions[];
   /**
-   * A map of topic name to the IDs that are subscribed to that topic. Incoming messages
-   * are bucketed by ID so only the messages a panel subscribed to are sent to it.
+   * 最後のPlayer機能一覧
+   * public.startPlayback/playUntil等の更新判定に使用
+   * 機能変更時のみAPIバインディングを更新することで効率化
+   */
+  lastCapabilities: string[];
+
+  /**
+   * サブスクリプションメモ化関数
+   * 参照等価性を保持してPlayerサブスクリプション変更を最小化
+   * 同一内容のサブスクリプションに対して同一オブジェクトを返す
+   */
+  subscriptionMemoizer: (sub: SubscribePayload) => SubscribePayload;
+
+  /**
+   * パネル別サブスクリプションマップ
+   * Key: パネルID, Value: そのパネルのサブスクリプション配列
+   * パネル個別の購読管理と動的更新に使用
+   */
+  subscriptionsById: Map<string, Immutable<SubscribePayload[]>>;
+
+  /**
+   * パネル別パブリッシャーマップ
+   * Key: パネルID, Value: そのパネルのパブリッシャー設定配列
+   */
+  publishersById: { [key: string]: AdvertiseOptions[] };
+
+  /**
+   * 全パブリッシャー統合配列
+   * publishersByIdから生成される統合リスト
+   * Playerに送信される実際のパブリッシャー設定
+   */
+  allPublishers: AdvertiseOptions[];
+
+  /**
+   * トピック別購読者IDマップ
+   * Key: トピック名, Value: そのトピックを購読するパネルID配列
    *
-   * Note: Even though we avoid storing the same ID twice in the array, we use an array rather than
-   * a Set because iterating over array elements is faster than iterating a Set and the "hot" path
-   * for dispatching messages needs to iterate over the array of IDs.
+   * 受信メッセージをID別にバケッティングし、
+   * パネルが購読したメッセージのみを送信するために使用。
+   *
+   * 注意: 同一IDの重複保存は避けているが、Setではなく配列を使用。
+   * これは配列要素の反復処理がSetより高速で、
+   * メッセージ配信の「ホット」パスで配列反復が必要なため。
    */
   subscriberIdsByTopic: Map<string, string[]>;
-  /** This holds the last message emitted by the player on each topic. Attempt to use this before falling back to player backfill.
+
+  /**
+   * トピック別最後メッセージキャッシュ
+   * Key: トピック名, Value: そのトピックの最後のメッセージ
+   *
+   * 新規購読者に対して即座に最後のメッセージを提供し、
+   * Playerバックフィルに頼る前にこのキャッシュを使用する。
    */
   lastMessageEventByTopic: Map<string, MessageEvent>;
-  /** Function to call when react render has completed with the latest state */
+
+  /**
+   * レンダリング完了コールバック関数（オプショナル）
+   * React レンダリング完了時に呼び出される関数
+   * フレーム制御とパフォーマンス最適化に使用
+   */
   renderDone?: () => void;
 
-  /** Part of the state that is exposed to consumers via useMessagePipeline */
+  /**
+   * 公開状態
+   * useMessagePipeline経由で消費者に公開される状態部分
+   * パネルコンポーネントが直接アクセスする統一インターフェース
+   */
   public: MessagePipelineContext;
 };
 
+/**
+ * サブスクリプション更新アクション型定義
+ * パネルのサブスクリプション変更時に使用
+ */
 type UpdateSubscriberAction = {
   type: "update-subscriber";
+  /** パネルの一意識別子 */
   id: string;
+  /** 新しいサブスクリプション配列 */
   payloads: Immutable<SubscribePayload[]>;
 };
+
+/**
+ * Player状態更新アクション型定義
+ * Player状態変更時に使用
+ */
 type UpdatePlayerStateAction = {
   type: "update-player-state";
+  /** 新しいPlayer状態 */
   playerState: PlayerState;
+  /** レンダリング完了コールバック（オプショナル） */
   renderDone?: () => void;
 };
 
+/**
+ * MessagePipeline状態アクション型定義
+ * 状態更新のための全アクションタイプを統合
+ */
 export type MessagePipelineStateAction =
   | UpdateSubscriberAction
   | UpdatePlayerStateAction
   | { type: "set-publishers"; id: string; payloads: AdvertiseOptions[] };
 
+/**
+ * MessagePipelineストア作成関数
+ *
+ * Zustandベースの高性能ストアを作成し、MessagePipelineの
+ * 中核となる状態管理システムを初期化する。
+ *
+ * ## 主要機能
+ *
+ * ### 1. 状態管理初期化
+ * - 各種Mapとキャッシュの初期化
+ * - サブスクリプションメモ化の設定
+ * - 公開APIの構築
+ *
+ * ### 2. アクション処理
+ * - サブスクリプション更新
+ * - Player状態更新
+ * - パブリッシャー設定
+ *
+ * ### 3. 統合API提供
+ * - パネル向け統一インターフェース
+ * - Player操作API
+ * - アセット取得機能
+ * - フレーム制御機能
+ *
+ * @param config - ストア作成設定
+ * @returns MessagePipeline Zustandストア
+ *
+ * @example
+ * ```ts
+ * const store = createMessagePipelineStore({
+ *   promisesToWaitForRef,
+ *   initialPlayer: player
+ * });
+ *
+ * const state = store.getState();
+ * state.dispatch({ type: "update-subscriber", id: "panel1", payloads: [] });
+ * ```
+ */
 export function createMessagePipelineStore({
   promisesToWaitForRef,
   initialPlayer,
 }: {
+  /** フレーム一時停止Promise配列への参照 */
   promisesToWaitForRef: MutableRefObject<FramePromise[]>;
+  /** 初期Playerインスタンス */
   initialPlayer: Player | undefined;
 }): StoreApi<MessagePipelineInternalState> {
   return createStore((set, get) => ({
@@ -110,10 +324,21 @@ export function createMessagePipelineStore({
     lastMessageEventByTopic: new Map(),
     lastCapabilities: [],
 
+    /**
+     * アクション実行関数
+     * 指定されたアクションに基づいて状態を更新
+     */
     dispatch(action) {
       set((state) => reducer(state, action));
     },
 
+    /**
+     * 状態リセット関数
+     *
+     * 公開・内部状態を初期値に戻す。
+     * Player変更時やエラー回復時に使用され、
+     * 前の状態による影響を完全に除去する。
+     */
     reset() {
       set((prev) => ({
         ...prev,
@@ -141,25 +366,61 @@ export function createMessagePipelineStore({
       }));
     },
 
+    /**
+     * 公開MessagePipelineContext
+     * パネルコンポーネントがアクセスする統一インターフェース
+     */
     public: {
       playerState: defaultPlayerState(initialPlayer),
       messageEventsBySubscriberId: new Map(),
       subscriptions: [],
       sortedTopics: [],
       datatypes: new Map(),
+
+      /**
+       * サブスクリプション設定関数
+       * 指定されたパネルのサブスクリプションを更新
+       */
       setSubscriptions(id, payloads) {
         get().dispatch({ type: "update-subscriber", id, payloads });
       },
+
+      /**
+       * パブリッシャー設定関数
+       * 指定されたパネルのパブリッシャーを設定し、Playerに反映
+       */
       setPublishers(id, payloads) {
         get().dispatch({ type: "set-publishers", id, payloads });
         get().player?.setPublishers(get().allPublishers);
       },
+
+      /**
+       * パラメータ設定関数
+       * ROSパラメータサーバーにパラメータを設定
+       */
       setParameter(key, value) {
         get().player?.setParameter(key, value);
       },
+
+      /**
+       * メッセージ発行関数
+       * ROSトピックにメッセージを発行
+       */
       publish(payload) {
         get().player?.publish(payload);
       },
+
+      /**
+       * ROSサービス呼び出し関数
+       *
+       * ROSサービスを非同期で呼び出す。
+       * Playerが存在しない場合はエラーを投げる。
+       *
+       * @param service - サービス名
+       * @param request - リクエストデータ
+       * @returns サービスレスポンス
+       * @throws Playerが存在しない場合
+       */
       async callService(service, request) {
         const player = get().player;
         if (!player) {
@@ -167,12 +428,40 @@ export function createMessagePipelineStore({
         }
         return await player.callService(service, request);
       },
+
+      /**
+       * アセット取得関数
+       *
+       * 拡張機能やリソースファイルを取得する。
+       * package://、HTTP、その他のプロトコルに対応し、
+       * デスクトップアプリとWebアプリの両方で動作する。
+       *
+       * ## プロトコル対応
+       *
+       * ### 1. package://プロトコル
+       * - デスクトップ: ビルトインfetch + Playerフォールバック
+       * - Web: Player経由 + 相対URL解決フォールバック
+       *
+       * ### 2. HTTP/HTTPSプロトコル
+       * - 標準fetchによる取得
+       *
+       * ### 3. その他プロトコル
+       * - Player.fetchAsset()経由での取得
+       *
+       * @param uri - 取得するリソースのURI
+       * @param options - 取得オプション（signal等）
+       * @returns アセットデータ
+       * @throws 取得失敗時
+       */
       async fetchAsset(uri, options) {
         const { protocol } = new URL(uri);
         const player = get().player;
 
         if (protocol === "package:") {
-          // For the desktop app, package:// is registered as a supported schema for builtin _fetch_ calls.
+          /**
+           * package://プロトコル処理
+           * デスクトップアプリではビルトインfetchが対応済み
+           */
           const canBuiltinFetchPkgUri = isDesktopApp();
           const pkgPath = uri.slice("package://".length);
           const pkgName = pkgPath.split("/")[0];
@@ -182,10 +471,13 @@ export function createMessagePipelineStore({
               return await player.fetchAsset(uri);
             } catch (err: unknown) {
               if (canBuiltinFetchPkgUri) {
-                // Fallback to a builtin _fetch_ call if the asset couldn't be loaded through the player.
+                /**
+                 * Player経由で取得できない場合、
+                 * ビルトインfetchでフォールバック
+                 */
                 return await builtinFetch(uri, options);
               }
-              throw err; // Bail out otherwise.
+              throw err; // その他の場合はエラーを再投げ
             }
           } else if (canBuiltinFetchPkgUri) {
             return await builtinFetch(uri, options);
@@ -195,30 +487,63 @@ export function createMessagePipelineStore({
             !options.referenceUrl.startsWith("package://") &&
             options.referenceUrl.includes(pkgName)
           ) {
-            // As last resort to load the package://<pkgName>/<pkgPath> URL, we resolve the package URL to
-            // be relative of the base URL (which contains <pkgName> and is not a package:// URL itself).
-            // Example:
-            //   base URL: https://example.com/<pkgName>/urdf/robot.urdf
-            //   resolved: https://example.com/<pkgName>/<pkgPath>
+            /**
+             * package://<pkgName>/<pkgPath> URLの最後の手段として、
+             * ベースURL（<pkgName>を含み、package://でない）からの
+             * 相対URLとしてpackage URLを解決する。
+             *
+             * 例:
+             *   ベースURL: https://example.com/<pkgName>/urdf/robot.urdf
+             *   解決結果: https://example.com/<pkgName>/<pkgPath>
+             */
             const resolvedUrl =
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
             return await builtinFetch(resolvedUrl, options);
           }
         }
 
-        // Use a regular fetch for all other protocols
+        /**
+         * その他のプロトコルは標準fetchを使用
+         */
         return await builtinFetch(uri, options);
       },
+
+      /**
+       * メタデータ取得関数
+       * データソースのメタデータ情報を取得
+       */
       getMetadata() {
         const player = get().player;
         return player?.getMetadata?.() ?? Object.freeze([]);
       },
+
+      /** 再生制御API（Player機能に応じて動的設定） */
       startPlayback: undefined,
       playUntil: undefined,
       pausePlayback: undefined,
       setPlaybackSpeed: undefined,
       seekPlayback: undefined,
 
+      /**
+       * フレーム一時停止関数
+       *
+       * 重い処理を行う際に描画フレームを一時停止し、
+       * 処理完了後に再開するための制御機能。
+       * Condvarベースの効率的な非同期制御を実装。
+       *
+       * @param name - 一時停止の理由を示す名前（デバッグ用）
+       * @returns フレーム再開関数
+       *
+       * @example
+       * ```ts
+       * const resume = pauseFrame("heavy-processing");
+       * try {
+       *   await heavyAsyncOperation();
+       * } finally {
+       *   resume();
+       * }
+       * ```
+       */
       pauseFrame(name: string) {
         const condvar = new Condvar();
         promisesToWaitForRef.current.push({ name, promise: condvar.wait() });
@@ -229,7 +554,24 @@ export function createMessagePipelineStore({
     },
   }));
 }
-/** Update subscriptions. New topics that have already emit messages previously we emit the last message on the topic to the subscriber */
+
+/**
+ * サブスクリプション更新処理関数
+ *
+ * パネルのサブスクリプション変更時に呼び出され、以下の処理を実行：
+ * 1. サブスクリプションマップの更新
+ * 2. トピック別購読者マップの再構築
+ * 3. 新規トピックの検出と最後メッセージ配信
+ * 4. 不要なキャッシュのクリーンアップ
+ *
+ * ## 新規トピック処理
+ * 新しくサブスクライブしたトピックに対して、キャッシュされた
+ * 最後のメッセージを即座に配信し、ユーザー体験を向上させる。
+ *
+ * @param prevState - 前の状態
+ * @param action - サブスクリプション更新アクション
+ * @returns 新しい状態
+ */
 function updateSubscriberAction(
   prevState: MessagePipelineInternalState,
   action: UpdateSubscriberAction,
@@ -239,7 +581,10 @@ function updateSubscriberAction(
   const subscriptionsById = new Map(previousSubscriptionsById);
 
   if (action.payloads.length === 0) {
-    // When a subscription id has no topics we removed it from our map
+    /**
+     * サブスクリプションIDにトピックがない場合、
+     * マップから削除する
+     */
     subscriptionsById.delete(action.id);
   } else {
     subscriptionsById.set(action.id, action.payloads);
@@ -247,15 +592,19 @@ function updateSubscriberAction(
 
   const subscriberIdsByTopic = new Map<string, string[]>();
 
-  // make a map of topics to subscriber ids
+  /**
+   * トピック別購読者IDマップの構築
+   */
   for (const [id, subs] of subscriptionsById) {
     for (const subscription of subs) {
       const topic = subscription.topic;
 
       const ids = subscriberIdsByTopic.get(topic) ?? [];
-      // If the id is already present in the array for the topic then we should not add it again.
-      // If we add it again it will be given frame messages again when bucketing incoming messages
-      // by subscriber id.
+      /**
+       * IDがトピックの配列に既に存在する場合は再追加しない。
+       * 再追加すると、購読者IDによる受信メッセージのバケッティング時に
+       * フレームメッセージが再度与えられてしまう。
+       */
       if (!ids.includes(id)) {
         ids.push(id);
       }
@@ -263,7 +612,10 @@ function updateSubscriberAction(
     }
   }
 
-  // Record any _new_ topics for this subscriber so that we can emit last messages on these topics
+  /**
+   * この購読者の新規トピックを記録し、
+   * これらのトピックで最後のメッセージを配信できるようにする
+   */
   const newTopicsForId = new Set<string>();
 
   const prevSubsForId = previousSubscriptionsById.get(action.id);
@@ -277,16 +629,21 @@ function updateSubscriberAction(
   const lastMessageEventByTopic = new Map(prevState.lastMessageEventByTopic);
 
   for (const topic of prevTopics) {
-    // if this topic has no other subscribers, we want to remove it from the lastMessageEventByTopic.
-    // This fixes the case where if a panel unsubscribes, triggers playback, and then resubscribes,
-    // they won't get this old stale message when they resubscribe again before getting the message
-    // at the current time frome seek-backfill.
+    /**
+     * このトピックに他の購読者がいない場合、
+     * lastMessageEventByTopicから削除する。
+     * これにより、パネルが購読解除→再生トリガー→再購読した場合に、
+     * 現在時刻のシークバックフィルからメッセージを取得する前に
+     * 古い陳腐化したメッセージを取得しない問題を修正する。
+     */
     if (!subscriberIdsByTopic.has(topic)) {
       lastMessageEventByTopic.delete(topic);
     }
   }
 
-  // Inject the last message on new topics for this subscriber
+  /**
+   * この購読者の新規トピックに最後のメッセージを注入
+   */
   const messagesForSubscriber = [];
   for (const topic of newTopicsForId) {
     const msgEvent = lastMessageEventByTopic.get(topic);
@@ -301,7 +658,9 @@ function updateSubscriberAction(
     newMessagesBySubscriberId = new Map<string, readonly MessageEvent[]>(
       prevState.public.messageEventsBySubscriberId,
     );
-    // This should update only the panel that subscribed to the new topic
+    /**
+     * 新しいトピックを購読したパネルのみを更新
+     */
     newMessagesBySubscriberId.set(action.id, messagesForSubscriber);
   }
 
@@ -322,9 +681,28 @@ function updateSubscriberAction(
     public: newPublicState,
   };
 }
-// Update with a player state.
-// Put messages from the player state into messagesBySubscriberId. Any new topic subscribers, receive
-// the last message on a topic.
+
+/**
+ * Player状態更新処理関数
+ *
+ * Player状態変更時に呼び出され、以下の処理を実行：
+ * 1. メッセージの購読者別配信
+ * 2. トピック・データ型情報の更新
+ * 3. Player機能の動的API バインディング
+ * 4. 最後メッセージキャッシュの更新
+ *
+ * ## メッセージ配信処理
+ * 受信メッセージを購読者別にバケッティングし、
+ * 各パネルが必要なメッセージのみを受信する仕組み。
+ *
+ * ## API動的バインディング
+ * Player機能（capabilities）に応じて、再生制御APIを
+ * 動的にバインドし、機能変更時のみ更新することで効率化。
+ *
+ * @param prevState - 前の状態
+ * @param action - Player状態更新アクション
+ * @returns 新しい状態
+ */
 function updatePlayerStateAction(
   prevState: MessagePipelineInternalState,
   action: UpdatePlayerStateAction,
@@ -333,19 +711,26 @@ function updatePlayerStateAction(
 
   const seenTopics = new Set<string>();
 
-  // We need a new set of message arrays for each subscriber since downstream users rely
-  // on object instance reference checks to determine if there are new messages
+  /**
+   * 各購読者に対して新しいメッセージ配列セットが必要。
+   * 下流ユーザーがオブジェクトインスタンス参照チェックを使用して
+   * 新しいメッセージがあるかどうかを判定するため。
+   */
   const messagesBySubscriberId = new Map<string, MessageEvent[]>();
 
   const subscriberIdsByTopic = prevState.subscriberIdsByTopic;
 
   const lastMessageEventByTopic = prevState.lastMessageEventByTopic;
 
-  // Put messages into per-subscriber queues
+  /**
+   * メッセージを購読者別キューに配置
+   */
   if (messages && messages !== prevState.public.playerState.activeData?.messages) {
     for (const messageEvent of messages) {
-      // Save the last message on every topic to send the last message
-      // to newly subscribed panels.
+      /**
+       * 新しく購読したパネルに最後のメッセージを送信するため、
+       * 全トピックの最後のメッセージを保存
+       */
       lastMessageEventByTopic.set(messageEvent.topic, messageEvent);
 
       seenTopics.add(messageEvent.topic);
@@ -370,18 +755,30 @@ function updatePlayerStateAction(
     playerState: action.playerState,
     messageEventsBySubscriberId: messagesBySubscriberId,
   };
+
+  /**
+   * トピック情報の更新
+   */
   const topics = action.playerState.activeData?.topics;
   if (topics !== prevState.public.playerState.activeData?.topics) {
     newPublicState.sortedTopics = topics
       ? [...topics].sort((a, b) => a.name.localeCompare(b.name))
       : [];
   }
+
+  /**
+   * データ型情報の更新
+   */
   if (
     action.playerState.activeData?.datatypes !== prevState.public.playerState.activeData?.datatypes
   ) {
     newPublicState.datatypes = action.playerState.activeData?.datatypes ?? new Map();
   }
 
+  /**
+   * Player機能の動的APIバインディング
+   * 機能変更時のみAPI関数をバインドし、効率化を図る
+   */
   const capabilities = action.playerState.capabilities;
   const player = prevState.player;
   if (player && !shallowequal(capabilities, prevState.lastCapabilities)) {
@@ -411,6 +808,16 @@ function updatePlayerStateAction(
   };
 }
 
+/**
+ * MessagePipelineストアリデューサー関数
+ *
+ * Redux様のリデューサーパターンにより、
+ * アクションタイプに応じて適切な状態更新関数を呼び出す。
+ *
+ * @param prevState - 前の状態
+ * @param action - 実行するアクション
+ * @returns 新しい状態
+ */
 export function reducer(
   prevState: MessagePipelineInternalState,
   action: MessagePipelineStateAction,
@@ -433,6 +840,18 @@ export function reducer(
   }
 }
 
+/**
+ * ビルトインfetch関数
+ *
+ * 標準fetchAPIを使用してリソースを取得し、
+ * MessagePipeline用の統一形式に変換する。
+ * エラーハンドリングとレスポンス形式の標準化を提供。
+ *
+ * @param url - 取得するURL
+ * @param opts - fetchオプション
+ * @returns 統一形式のアセットデータ
+ * @throws HTTP エラー時
+ */
 async function builtinFetch(url: string, opts?: { signal?: AbortSignal }) {
   const response = await fetch(url, opts);
   if (!response.ok) {

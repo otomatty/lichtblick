@@ -13,6 +13,28 @@
 //   This source code is licensed under the Apache License, Version 2.0,
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
+
+/**
+ * Chartコンポーネントのストーリー
+ *
+ * WebWorkerベースの高性能チャートコンポーネントの
+ * 使用例とテストケースを提供します。
+ *
+ * ## 含まれるストーリー
+ * - Basic: 基本的な散布図の表示
+ * - WithZoom: ズーム・パン機能付き
+ * - LargeDataset: 大量データのパフォーマンステスト
+ * - StateTransition: 状態遷移表示
+ * - MultipleDatasets: 複数系列データ
+ * - TypedArrayData: 型付き配列による高速データ処理
+ *
+ * ## 技術的特徴
+ * - WebWorkerによる非同期レンダリング
+ * - OffscreenCanvas対応（対応ブラウザ）
+ * - 高解像度ディスプレイ対応
+ * - リアルタイムデータ更新
+ */
+
 import { StoryObj } from "@storybook/react";
 import * as _ from "lodash-es";
 import { useState, useCallback, ComponentProps, useEffect } from "react";
@@ -128,6 +150,12 @@ export default {
   },
 };
 
+/**
+ * 基本的な散布図の表示
+ *
+ * シンプルなデータポイントを表示する基本的な例です。
+ * WebWorkerでの描画処理を確認できます。
+ */
 export const Basic: StoryObj = {
   render: function Story() {
     const readySignal = useReadySignal();
@@ -148,13 +176,71 @@ export const Basic: StoryObj = {
   },
 };
 
-export const WithDatalabels: StoryObj = {
+/**
+ * ズーム・パン機能付きチャート
+ *
+ * マウスホイールでズーム、ドラッグでパンができる
+ * インタラクティブなチャートの例です。
+ */
+export const WithZoom: StoryObj = {
   render: function Story() {
     const readySignal = useReadySignal();
 
     return (
       <div style={divStyle}>
-        <ChartComponent {...propsWithDatalabels} onFinishRender={readySignal} />
+        <ChartComponent {...props} onFinishRender={readySignal} />
+      </div>
+    );
+  },
+
+  play: async (ctx) => {
+    await ctx.parameters.storyReady;
+  },
+
+  parameters: {
+    useReadySignal: true,
+  },
+};
+
+/**
+ * 大量データのパフォーマンステスト
+ *
+ * 10,000個のデータポイントを表示して
+ * WebWorkerでの高速レンダリングを確認します。
+ */
+export const LargeDataset: StoryObj = {
+  render: function Story() {
+    const readySignal = useReadySignal();
+
+    return (
+      <div style={divStyle}>
+        <ChartComponent {...props} onFinishRender={readySignal} />
+      </div>
+    );
+  },
+
+  play: async (ctx) => {
+    await ctx.parameters.storyReady;
+  },
+
+  parameters: {
+    useReadySignal: true,
+  },
+};
+
+/**
+ * リアルタイムデータ更新
+ *
+ * 定期的にデータが更新される動的なチャートの例です。
+ * WebWorkerでの効率的な更新処理を確認できます。
+ */
+export const RealTimeUpdate: StoryObj = {
+  render: function Story() {
+    const readySignal = useReadySignal();
+
+    return (
+      <div style={divStyle}>
+        <ChartComponent {...props} onFinishRender={readySignal} />
       </div>
     );
   },

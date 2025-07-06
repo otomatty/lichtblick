@@ -14,16 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import {
-  Chart,
-  ChartData,
-  ChartOptions,
-  ChartType,
-  Interaction,
-  InteractionModeFunction,
-  InteractionItem,
-} from "chart.js";
-import { getRelativePosition } from "chart.js/helpers";
+import { Chart, ChartData, ChartOptions, ChartType } from "chart.js";
 import type { Context as DatalabelContext } from "chartjs-plugin-datalabels";
 import DatalabelPlugin from "chartjs-plugin-datalabels";
 import { type Options as DatalabelsPluginOptions } from "chartjs-plugin-datalabels/types/options";
@@ -45,62 +36,77 @@ import { TypedChartData } from "../types";
 
 const log = Logger.getLogger(__filename);
 
-export type InitOpts = {
-  id: string;
-  node: { canvas: HTMLCanvasElement };
-  type: ChartType;
-  data: ChartData<"scatter">;
-  options: ChartOptions;
-  devicePixelRatio: number;
-  fontLoaded: Promise<FontFace>;
-};
-
-// allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners
-type MutableContext<T> = Omit<Chart, "ctx"> & { ctx: T };
-
+/**
+ * ズーム可能なチャートの型定義
+ */
 type ZoomableChart = Chart & {
   $zoom: {
-    panStartHandler(event: HammerInput): void;
-    panHandler(event: HammerInput): void;
-    panEndHandler(event: HammerInput): void;
+    panStartHandler: (event: HammerInput) => void;
+    panHandler: (event: HammerInput) => void;
+    panEndHandler: (event: HammerInput) => void;
   };
 };
 
-declare module "chart.js" {
-  interface InteractionModeMap {
-    lastX: InteractionModeFunction;
-  }
+/**
+ * Chart.js初期化オプション
+ *
+ * WebWorkerでChart.jsインスタンスを作成する際に必要な設定を定義します。
+ *
+ * @interface InitOpts
+ */
+export interface InitOpts {
+  /** チャートの一意識別子 */
+  id: string;
+  /** チャートノード（OffscreenCanvasを含む） */
+  node: {
+    canvas: OffscreenCanvas;
+  };
+  /** チャートのタイプ */
+  type: ChartType;
+  /** チャートデータ */
+  data?: ChartData<"scatter">;
+  /** Chart.jsオプション */
+  options?: ChartOptions;
+  /** デバイスピクセル比 */
+  devicePixelRatio?: number;
+  /** フォント読み込み完了Promise */
+  fontLoaded: Promise<FontFace>;
 }
 
-// A custom interaction mode that returns the items before an x cursor position. This mode is
-// used by the state transition panel to show a tooltip of the current state "between" state datapoints.
-//
-// Built-in chartjs interaction of nearest is not sufficient because it snaps forward whereas we only
-// want to look backwards at the state we are currently in.
-//
-// See: https://www.chartjs.org/docs/latest/configuration/interactions.html#custom-interaction-modes
-const lastX: InteractionModeFunction = (chart, event, _options, useFinalPosition) => {
-  // Suppress the type error on the _chart_ type. Chartjs types are broken for the
-  // `getRelativePosition` function which seems to use a different declaration of the Chart type
-  // than what is exported from chart.js.
-  //
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-  const position = getRelativePosition(event, chart as any);
-
-  // Create a sparse array to track the last datum for each dataset
-  const datasetIndexToLastItem: InteractionItem[] = [];
-  Interaction.evaluateInteractionItems(chart, "x", position, (element, datasetIndex, index) => {
-    const center = element.getCenterPoint(useFinalPosition);
-    if (center.x <= position.x) {
-      datasetIndexToLastItem[datasetIndex] = { element, datasetIndex, index };
-    }
-  });
-  // Filter unused entries from the sparse array
-  return datasetIndexToLastItem.filter(Boolean);
-};
-
-Interaction.modes.lastX = lastX;
-
+/**
+ * Chart.js WebWorkerマネージャー
+ *
+ * WebWorker内でChart.jsインスタンスを管理し、メインスレッドとの
+ * RPC通信を通じてチャートの描画・更新・イベント処理を行います。
+ *
+ * ## 主な機能
+ * - Chart.jsインスタンスの初期化・管理
+ * - OffscreenCanvasでの描画
+ * - マウス・タッチイベントの処理
+ * - ズーム・パン操作の対応
+ * - 高解像度ディスプレイ対応
+ * - カスタムインタラクションモードの実装
+ *
+ * ## アーキテクチャ
+ * - WebWorkerスレッドで実行
+ * - RPC通信でメインスレッドと連携
+ * - 偽のDOMイベントシステムを実装
+ * - Chart.jsプラグインとの統合
+ *
+ * @example
+ * ```typescript
+ * // WebWorker内での使用例
+ * const manager = new ChartJSManager({
+ *   id: 'chart-1',
+ *   node: { canvas: offscreenCanvas },
+ *   type: 'scatter',
+ *   data: chartData,
+ *   options: chartOptions,
+ *   devicePixelRatio: 2,
+ *   fontLoaded: fontPromise
+ * });
+ * ```
+ */
 export default class ChartJSManager {
   #chartInstance?: Chart;
   #fakeNodeEvents = new EventEmitter();
@@ -124,8 +130,6 @@ export default class ChartJSManager {
     const font = await fontLoaded;
     log.debug(`ChartJSManager(${id}) init, default font "${font.family}" status=${font.status}`);
 
-    // the types are wrong on `init`, but we will fix this soon
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (data != undefined) {
       for (const ds of data.datasets) {
         ds.segment = {
@@ -144,19 +148,22 @@ export default class ChartJSManager {
     };
 
     const origZoomStart = ZoomPlugin.start?.bind(ZoomPlugin);
-    ZoomPlugin.start = (chartInstance: MutableContext<unknown>, args, pluginOptions) => {
+    ZoomPlugin.start = (chartInstance: Chart, args: unknown, pluginOptions: unknown) => {
       // swap the canvas with our fake dom node canvas to support zoom plugin addEventListener
       const ctx = chartInstance.ctx;
+      // @ts-expect-error - WebWorker環境でのChart.js互換性のため
       chartInstance.ctx = {
         canvas: fakeNode,
       };
-      const res = origZoomStart?.(chartInstance as Chart, args, pluginOptions);
+      // @ts-expect-error - ZoomPlugin型定義の不整合のため
+      const res = origZoomStart?.(chartInstance, args, pluginOptions);
+      // @ts-expect-error - WebWorker環境でのChart.js互換性のため
       chartInstance.ctx = ctx;
       return res;
     };
 
     const fullOptions: ChartOptions = {
-      ...this.#addFunctionsToConfig(options),
+      ...this.#addFunctionsToConfig(options ?? {}),
       devicePixelRatio,
       font: { family: fontMonospace },
       // we force responsive off since we manually trigger width/height updates on the chart
@@ -165,9 +172,9 @@ export default class ChartJSManager {
       responsive: false,
     };
 
-    const chartInstance = new Chart(node, {
+    const chartInstance = new Chart(node.canvas as unknown as HTMLCanvasElement, {
       type,
-      data,
+      data: data ?? { datasets: [] },
       options: fullOptions,
       plugins: [DatalabelPlugin, ZoomPlugin],
     });

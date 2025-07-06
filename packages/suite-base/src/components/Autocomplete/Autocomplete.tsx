@@ -36,39 +36,75 @@ import { makeStyles } from "tss-react/mui";
 
 import { ListboxAdapterChild, ReactWindowListboxAdapter } from "./ReactWindowListboxAdapter";
 
+/** fzfライブラリで返される最大マッチ数の上限 */
 const MAX_FZF_MATCHES = 200;
 
-// Above this number of items we fall back to the faster fuzzy find algorithm.
+/** この数を超えるアイテム数の場合、高速なファジーファインドアルゴリズム（v1）に切り替える */
 const FAST_FIND_ITEM_CUTOFF = 1_000;
 
+/**
+ * Autocompleteコンポーネントのプロパティ型定義
+ *
+ * @description Material-UIのAutocompleteをベースにしたLichtblick独自の高性能オートコンプリートコンポーネント用のプロパティ
+ */
 type AutocompleteProps = {
+  /** コンポーネントに適用するCSSクラス名 */
   className?: string;
+  /** 自動選択を無効にするかどうか */
   disableAutoSelect?: boolean;
+  /** コンポーネントを無効化するかどうか */
   disabled?: boolean;
+  /** フィルタリングに使用するテキスト（通常はvalueと同じ） */
   filterText?: string;
+  /** エラー状態を表示するかどうか */
   hasError?: boolean;
+  /** 入力フィールドに適用するインラインスタイル */
   inputStyle?: CSSProperties;
+  /** オートコンプリートで表示するアイテムのリスト */
   items: readonly string[];
+  /** ドロップダウンメニューに適用するインラインスタイル */
   menuStyle?: CSSProperties;
+  /** ドロップダウンの最小幅 */
   minWidth?: number;
+  /** フォーカスが外れた時のコールバック */
   onBlur?: () => void;
+  /** 入力値が変更された時のコールバック */
   onChange?: (event: React.SyntheticEvent, text: string) => void;
+  /** アイテムが選択された時のコールバック */
   onSelect: (value: string, autocomplete: IAutocomplete) => void;
+  /** 入力フィールドのプレースホルダーテキスト */
   placeholder?: string;
+  /** 読み取り専用モードにするかどうか */
   readOnly?: boolean;
+  /** フォーカス時にテキストを選択するかどうか */
   selectOnFocus?: boolean;
+  /** フィルタリング時にソートするかどうか */
   sortWhenFiltering?: boolean;
+  /** 入力フィールドの現在の値 */
   value?: string;
+  /** TextFieldのバリアント（filled, outlined, standard） */
   variant?: TextFieldProps["variant"];
 };
 
+/**
+ * Autocompleteコンポーネントのインターフェース
+ *
+ * @description 親コンポーネントがAutocompleteを制御するためのメソッドを提供
+ */
 export interface IAutocomplete {
+  /** 入力フィールドの選択範囲を設定 */
   setSelectionRange(selectionStart: number, selectionEnd: number): void;
+  /** 入力フィールドにフォーカスを設定 */
   focus(): void;
+  /** 入力フィールドからフォーカスを外す */
   blur(): void;
 }
 
+/**
+ * コンポーネントのスタイル定義
+ */
 const useStyles = makeStyles()((theme) => ({
+  /** エラー状態の入力フィールドスタイル */
   inputError: {
     input: {
       color: theme.palette.error.main,
@@ -76,8 +112,15 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/** 空のSetオブジェクト（パフォーマンス最適化のため再利用） */
 const EMPTY_SET = new Set<number>();
 
+/**
+ * 通常のアイテムをFzfResultItem形式に変換する関数
+ *
+ * @param item - 変換対象のアイテム
+ * @returns FzfResultItem形式のオブジェクト
+ */
 function itemToFzfResult<T>(item: T): FzfResultItem<T> {
   return {
     item,
@@ -88,37 +131,73 @@ function itemToFzfResult<T>(item: T): FzfResultItem<T> {
   };
 }
 
-// We use fzf to filter the input items to make autocompleteItems so we don't need the
-// MuiAutocomplete to also filter the items. Using a passthrough function for filterOptions
-// disables the internal filtering of MuiAutocomplete
-//
-// https://mui.com/material-ui/react-autocomplete/#search-as-you-type
+/**
+ * MuiAutocompleteの内部フィルタリングを無効化するためのパススルー関数
+ *
+ * @description fzfライブラリで事前にフィルタリングを行うため、MuiAutocompleteの
+ * 内部フィルタリングは不要。この関数により内部フィルタリングを無効化する。
+ *
+ * @see https://mui.com/material-ui/react-autocomplete/#search-as-you-type
+ */
 const filterOptions = (options: FzfResultItem[]) => options;
 
+/**
+ * オプションのラベルを取得する関数
+ *
+ * @param item - 文字列またはFzfResultItem
+ * @returns 表示用のラベル文字列
+ */
 const getOptionLabel = (item: string | FzfResultItem) =>
   typeof item === "string" ? item : item.item;
 
-// The builtin Popper in MuiAutocomplete uses the width hint from the parent Autocomplete to set
-// the width. We want to set the minWidth to allow the popper to grow wider than the input field width,
-// so we can show long topic paths and autocomplete entries.
+/**
+ * カスタムPopperコンポーネント
+ *
+ * @description MuiAutocompleteの標準Popperは親要素の幅に制限されるが、
+ * このカスタムPopperは最小幅を設定してより長いトピックパスや
+ * オートコンプリートエントリを表示できるようにする。
+ */
 const CustomPopper = function (props: PopperProps) {
   const width = props.style?.width ?? 0;
   return <Popper {...props} style={{ minWidth: width }} placement="bottom-start" />;
 };
 
 /**
- * <Autocomplete> is a Studio-specific wrapper of MUI autocomplete with support
- * for things like multiple autocompletes that seamlessly transition into each
- * other, e.g. when building more complex strings like in the Plot panel.
+ * Lichtblick独自の高性能オートコンプリートコンポーネント
+ *
+ * @description Material-UIのAutocompleteをベースにしたStudio専用のラッパーコンポーネント。
+ * 以下の特徴を持つ：
+ *
+ * - **高性能ファジーファインド**: fzfライブラリを使用した高速検索
+ * - **仮想化リスト**: react-windowによる大量アイテムの効率的な描画
+ * - **複数連続補完**: Plotパネルなどで複雑な文字列を構築する際の
+ *   シームレスな連続オートコンプリート対応
+ * - **パフォーマンス最適化**: 1000件以上のアイテムで高速アルゴリズムに自動切り替え
+ * - **カスタムPopper**: 長いパスを表示するための幅制限解除
+ *
+ * @example
+ * ```tsx
+ * <Autocomplete
+ *   items={topicNames}
+ *   value={currentTopic}
+ *   onSelect={(value, autocomplete) => {
+ *     setCurrentTopic(value);
+ *     autocomplete.blur(); // 連続補完を終了
+ *   }}
+ *   placeholder="トピック名を入力..."
+ * />
+ * ```
  */
 export const Autocomplete = React.forwardRef(function Autocomplete(
   props: AutocompleteProps,
   ref: React.ForwardedRef<IAutocomplete>,
 ): React.JSX.Element {
+  /** 入力フィールドへの参照 */
   const inputRef = useRef<HTMLInputElement>(ReactNull);
 
   const { classes, cx } = useStyles();
 
+  /** 内部状態として管理される値（制御されていない場合） */
   const [stateValue, setValue] = useState<string | undefined>(undefined);
 
   const {
@@ -137,46 +216,54 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
     variant = "filled",
   }: AutocompleteProps = props;
 
+  /** フィルタリングされていない全アイテムをFzfResultItem形式に変換 */
   const fzfUnfiltered = useMemo(() => {
     return items.map((item) => itemToFzfResult(item));
   }, [items]);
 
+  /** fzfインスタンス（ファジーファインド検索エンジン） */
   const fzf = useMemo(() => {
     return new Fzf(items, {
-      // v1 algorithm is significantly faster on long lists of items.
+      // アイテム数が多い場合はv1アルゴリズムを使用（高速）
       fuzzy: items.length > FAST_FIND_ITEM_CUTOFF ? "v1" : "v2",
       sort: sortWhenFiltering,
       limit: MAX_FZF_MATCHES,
     });
   }, [items, sortWhenFiltering]);
 
+  /** フィルタリングされたオートコンプリートアイテム */
   const autocompleteItems = useMemo(() => {
     return filterText ? fzf.find(filterText) : fzfUnfiltered;
   }, [filterText, fzf, fzfUnfiltered]);
 
+  /** エラー状態の判定（マッチするアイテムがなく、値が入力されている場合） */
   const hasError = props.hasError ?? (autocompleteItems.length === 0 && value?.length !== 0);
 
+  /** 入力フィールドの選択範囲を設定する関数 */
   const setSelectionRange = useCallback((selectionStart: number, selectionEnd: number): void => {
     inputRef.current?.focus();
     inputRef.current?.setSelectionRange(selectionStart, selectionEnd);
   }, []);
 
+  /** 入力フィールドにフォーカスを設定する関数 */
   const focus = useCallback(() => {
     inputRef.current?.focus();
   }, []);
 
+  /** 入力フィールドからフォーカスを外す関数 */
   const blur = useCallback(() => {
     inputRef.current?.blur();
     onBlurCallback?.();
   }, [onBlurCallback]);
 
-  // Give callers an opportunity to control autocomplete
+  /** 親コンポーネントがオートコンプリートを制御するためのインターフェースを提供 */
   useImperativeHandle(ref, () => ({ setSelectionRange, focus, blur }), [
     setSelectionRange,
     focus,
     blur,
   ]);
 
+  /** 入力値変更時のハンドラー */
   const onChange = useCallback(
     (_event: ReactNull | React.SyntheticEvent, newValue: string): void => {
       if (onChangeCallback) {
@@ -190,8 +277,12 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
     [onChangeCallback],
   );
 
-  // To allow multiple completions in sequence, it's up to the parent component
-  // to manually blur the input to finish a completion.
+  /**
+   * アイテム選択時のハンドラー
+   *
+   * @description 複数の連続補完を可能にするため、親コンポーネントが
+   * 手動でblur()を呼び出して補完を終了する必要がある
+   */
   const onSelect = useCallback(
     (_event: SyntheticEvent, selectedValue: ReactNull | string | FzfResultItem): void => {
       if (selectedValue != undefined && typeof selectedValue !== "string") {
@@ -233,12 +324,13 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
         />
       )}
       renderOption={(optProps, option: FzfResultItem, state) => {
-        // The return values of renderOption are passed as the _child_ argument to the ListboxComponent.
-        // Our ReactWindowListboxAdapter expects a tuple for each item in the list and will itself manage
-        // when and which items to render using virtualization.
+        // renderOptionの戻り値はListboxComponentの_child_引数として渡される。
+        // ReactWindowListboxAdapterは各アイテムに対してタプルを期待し、
+        // 仮想化を使用してアイテムの描画を自分で管理する。
         //
-        // The final as ReactNode cast is to appease the expected return type of renderOption because
-        // it does not understand that our ListboxAdapter needs a tuple and not a ReactNode
+        // 最後のas ReactNodeキャストは、renderOptionの期待される戻り値の型を
+        // 満たすためのもの。ListboxAdapterがReactNodeではなくタプルを必要とする
+        // ことを理解していないため。
         return [optProps, option, state] satisfies ListboxAdapterChild as React.ReactNode;
       }}
       selectOnFocus={selectOnFocus}

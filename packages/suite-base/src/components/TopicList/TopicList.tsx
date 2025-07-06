@@ -35,35 +35,92 @@ import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
 import { useTopicListSearch } from "./useTopicListSearch";
 
+/**
+ * セレクター関数：MessagePipelineからプレイヤーの接続状態を取得
+ * @param context - MessagePipelineのコンテキスト
+ * @returns プレイヤーの接続状態
+ */
 const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 
+/**
+ * TopicList - ROSトピックとメッセージパスの階層表示コンポーネント
+ *
+ * @description
+ * このコンポーネントは、データソースから取得したROSトピックとその内部のメッセージパス（スキーマ）を
+ * 階層的に表示する仮想化リストコンポーネントです。以下の主要機能を提供します：
+ *
+ * **主要機能:**
+ * - 📋 トピック一覧の表示（名前、型、統計情報）
+ * - 🔍 リアルタイム検索・フィルタリング（50msデバウンス）
+ * - 📊 メッセージパスの階層表示（スキーマ構造）
+ * - 🎯 複数選択（Ctrl/Cmd + クリック、Shift + クリック）
+ * - 🖱️ コンテキストメニュー（右クリックメニュー）
+ * - 🚀 仮想化による高パフォーマンス描画
+ * - 📱 ドラッグ&ドロップ対応
+ *
+ * **表示状態:**
+ * - NOT_PRESENT: データソース未選択
+ * - ERROR: エラー発生
+ * - INITIALIZING: 初期化中（スケルトン表示）
+ * - PRESENT: 通常表示
+ * - RECONNECTING: 再接続中
+ *
+ * **パフォーマンス最適化:**
+ * - react-window による仮想化リスト
+ * - 可変行高対応（トピック: 50px, メッセージパス: 28px）
+ * - デバウンス検索（50ms）
+ * - メモ化による不要な再描画防止
+ *
+ * **依存関係:**
+ * - useTopicListSearch: 検索・フィルタリングロジック
+ * - useMultiSelection: 複数選択状態管理
+ * - TopicRow: トピック行コンポーネント
+ * - MessagePathRow: メッセージパス行コンポーネント
+ * - ContextMenu: 右クリックメニュー
+ * - DirectTopicStatsUpdater: トピック統計更新（6秒間隔）
+ *
+ * @returns 仮想化されたトピック一覧UI
+ */
 export function TopicList(): React.JSX.Element {
   const { t } = useTranslation("topicList");
   const { classes } = useStyles();
+
+  // 検索フィルターの状態管理（デバウンス付き）
   const [undebouncedFilterText, setFilterText] = useState<string>("");
   const [debouncedFilterText] = useDebounce(undebouncedFilterText, 50);
   const onClear = () => {
     setFilterText("");
   };
 
+  // プレイヤー接続状態とデータソース情報の取得
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { topics, datatypes } = useDataSourceInfo();
 
+  // 仮想化リストの参照（行高キャッシュリセット用）
   const listRef = useRef<VariableSizeList>(ReactNull);
 
+  // 検索・フィルタリングされたツリーアイテムの取得
   const treeItems = useTopicListSearch({
     topics,
     datatypes,
     filterText: debouncedFilterText,
   });
+
+  // 複数選択機能の状態管理
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
 
+  // コンテキストメニューの状態管理
   const [contextMenuState, setContextMenuState] = useState<
     { position: PopoverPosition; items: DraggedMessagePath[] } | undefined
   >(undefined);
 
+  // 最新のツリーアイテム参照（コールバック内で使用）
   const latestTreeItems = useLatest(treeItems);
 
+  /**
+   * 選択されたアイテムをドラッグ可能なメッセージパスに変換
+   * @returns ドラッグ可能なメッセージパスの配列
+   */
   const getSelectedItemsAsDraggedMessagePaths = useCallback(() => {
     return filterMap(
       Array.from(getSelectedIndexes()).sort(),
@@ -74,12 +131,17 @@ export function TopicList(): React.JSX.Element {
     );
   }, [getSelectedIndexes, latestTreeItems]);
 
+  /**
+   * コンテキストメニューの表示処理
+   * @param event - マウスイベント
+   * @param index - クリックされたアイテムのインデックス
+   */
   const handleContextMenu = useCallback(
     (event: MouseEvent, index: number) => {
       event.preventDefault();
 
       const latestSelectedIndexes = getSelectedIndexes();
-      // Select only the clicked item if it was not already selected
+      // クリックされたアイテムが選択されていない場合は、そのアイテムのみを選択
       if (!latestSelectedIndexes.has(index)) {
         onSelect({ index, modKey: false, shiftKey: false });
       }
@@ -91,17 +153,27 @@ export function TopicList(): React.JSX.Element {
     [getSelectedIndexes, getSelectedItemsAsDraggedMessagePaths, onSelect],
   );
 
+  /**
+   * コンテキストメニューの閉じる処理
+   */
   const handleContextMenuClose = useCallback(() => {
     setContextMenuState(undefined);
   }, []);
 
+  // フィルター結果変更時の行高キャッシュリセット
   useEffect(() => {
     // Discard cached row heights when the filter results change
     listRef.current?.resetAfterIndex(0);
   }, [treeItems]);
 
+  // 仮想化リストに渡すデータ（メモ化）
   const itemData = useMemo(() => ({ treeItems, selectedIndexes }), [selectedIndexes, treeItems]);
 
+  /**
+   * 仮想化リストの行レンダリング関数
+   * @param props - react-windowから渡されるプロパティ
+   * @returns 行コンポーネント（TopicRow または MessagePathRow）
+   */
   const renderRow: React.FC<ListChildComponentProps<typeof itemData>> = useCallback(
     // `data` comes from the `itemData` we pass to the VariableSizeList below
     ({ index, style, data }) => {
@@ -115,6 +187,8 @@ export function TopicList(): React.JSX.Element {
           shiftKey: event.shiftKey,
         });
       };
+
+      // アイテムタイプに応じて適切な行コンポーネントを返す
       switch (treeItem.type) {
         case "topic":
           return (
@@ -145,6 +219,7 @@ export function TopicList(): React.JSX.Element {
     [handleContextMenu, onSelect],
   );
 
+  // プレイヤー接続状態に応じた早期リターン処理
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
     return <EmptyState>{t("noDataSourceSelected")}</EmptyState>;
   }
@@ -153,6 +228,7 @@ export function TopicList(): React.JSX.Element {
     return <EmptyState>{t("anErrorOccurred")}</EmptyState>;
   }
 
+  // 初期化中の場合はスケルトン表示
   if (playerPresence === PlayerPresence.INITIALIZING) {
     return (
       <>
@@ -184,6 +260,7 @@ export function TopicList(): React.JSX.Element {
     );
   }
 
+  // メイン表示：検索バー + 仮想化リスト + コンテキストメニュー
   return (
     <MessagePathSelectionProvider getSelectedItems={getSelectedItemsAsDraggedMessagePaths}>
       <div className={classes.root}>
@@ -219,7 +296,7 @@ export function TopicList(): React.JSX.Element {
         ) : (
           <EmptyState>
             {playerPresence === PlayerPresence.PRESENT && undebouncedFilterText
-              ? `${t("noTopicsOrDatatypesMatching")} \n “${undebouncedFilterText}”`
+              ? `${t("noTopicsOrDatatypesMatching")} \n "${undebouncedFilterText}"`
               : t("noTopicsAvailable")}
             {playerPresence === PlayerPresence.RECONNECTING && t("waitingForConnection")}
           </EmptyState>

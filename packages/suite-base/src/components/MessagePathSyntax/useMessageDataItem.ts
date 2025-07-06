@@ -25,30 +25,67 @@ import {
   useCachedGetMessagePathDataItems,
 } from "./useCachedGetMessagePathDataItems";
 
+/**
+ * useMessageDataItemフックのオプション設定
+ */
 type Options = {
+  /** 保持する履歴サイズ（マッチしたメッセージの数） */
   historySize: number;
 };
 
+/**
+ * メッセージリデューサーの状態型定義
+ *
+ * useMessageDataItemフックの内部状態を表現します。
+ * マッチしたメッセージの履歴、最新のメッセージイベント、使用されたパスを保持します。
+ */
 type ReducedValue = {
-  // Matched message (events) oldest message first
+  /** マッチしたメッセージ（イベント）の配列。最も古いメッセージが最初 */
   matches: MessageAndData[];
-
-  // The latest set of message events recevied to addMessages
+  /** addMessagesに受信された最新のメッセージイベントセット */
   messageEvents: readonly Readonly<MessageEvent>[];
-
-  // The path used to match these messages.
+  /** これらのメッセージをマッチするために使用されたパス */
   path: string;
 };
 
 /**
- * Return an array of MessageAndData[] for matching messages on @param path.
+ * 指定されたメッセージパスにマッチするメッセージのデータ項目を取得するフック
  *
- * The first array item is the oldest matched message, and the last item is the newest.
+ * 指定されたメッセージパスに対してマッチするメッセージの配列を返します。
+ * 配列の最初の項目が最も古いマッチしたメッセージで、最後の項目が最新のものです。
  *
- * The `historySize` option configures how many matching messages to keep. The default is 1.
+ * 主な特徴：
+ * - リアルタイムでメッセージをフィルタリングし、パスにマッチするもののみを保持
+ * - 設定可能な履歴サイズによるメモリ効率的な運用
+ * - メッセージリデューサーを使用した効率的な状態管理
+ * - パスの変更時の自動的な再フィルタリング
+ *
+ * @param path - マッチング対象のメッセージパス
+ * @param options - オプション設定（historySize等）
+ * @returns マッチしたメッセージとデータのペア配列（古いものから順）
+ *
+ * @example
+ * ```typescript
+ * // 基本的な使用例
+ * const matches = useMessageDataItem("/robot/pose.pose.x");
+ * // 最新のマッチしたメッセージのみを取得
+ *
+ * // 履歴サイズを指定した使用例
+ * const matches = useMessageDataItem("/sensors/data[0].value", { historySize: 10 });
+ * // 最大10個のマッチしたメッセージを保持
+ *
+ * // 結果の使用例
+ * if (matches.length > 0) {
+ *   const latestMatch = matches[matches.length - 1];
+ *   console.log("Latest value:", latestMatch.queriedData[0]?.value);
+ *   console.log("Message timestamp:", latestMatch.messageEvent.receiveTime);
+ * }
+ * ```
  */
 export function useMessageDataItem(path: string, options?: Options): ReducedValue["matches"] {
   const { historySize = 1 } = options ?? {};
+
+  // メッセージパスからサブスクリプションペイロードを生成
   const topics: SubscribePayload[] = useMemo(() => {
     const payload = subscribePayloadFromMessagePath(path, "partial");
     if (payload) {
@@ -59,6 +96,16 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
 
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([path]);
 
+  /**
+   * 新しいメッセージイベントを処理して状態を更新するコールバック
+   *
+   * 受信したメッセージイベントの配列を処理し、指定されたパスにマッチするものを
+   * 既存の履歴に追加します。パフォーマンス最適化のため、逆順で処理します。
+   *
+   * @param prevValue - 前の状態値
+   * @param messageEvents - 新しく受信したメッセージイベント配列
+   * @returns 更新された状態値
+   */
   const addMessages = useCallback(
     (prevValue: ReducedValue, messageEvents: Readonly<MessageEvent[]>): ReducedValue => {
       if (messageEvents.length === 0) {
@@ -67,8 +114,8 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
 
       const newMatches: MessageAndData[] = [];
 
-      // Iterate backwards since our default history size is 1 and we might not need to visit all messages
-      // This does mean we need to flip newMatches around since we want to store older items first
+      // デフォルトの履歴サイズが1で、すべてのメッセージを訪問する必要がない可能性があるため、
+      // 逆順で反復処理。これは、古いアイテムを最初に保存したいため、newMatchesを反転する必要があることを意味する
       for (let i = messageEvents.length - 1; i >= 0 && newMatches.length < historySize; --i) {
         const messageEvent = messageEvents[i]!;
         const queriedData = cachedGetMessagePathDataItems(path, messageEvent);
@@ -77,8 +124,7 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
         }
       }
 
-      // We want older items to be first in the array. Since we iterated backwards
-      // we reverse the matches.
+      // 古いアイテムを配列の最初に配置したい。逆順で反復処理したため、マッチを反転する
       const reversed = newMatches.reverse();
       if (newMatches.length === historySize) {
         return {
@@ -98,6 +144,15 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
     [cachedGetMessagePathDataItems, historySize, path],
   );
 
+  /**
+   * 状態の復元処理を行うコールバック
+   *
+   * パスが変更された場合や、データソースが変更された場合に、
+   * 前回のメッセージバッチを再フィルタリングして状態を復元します。
+   *
+   * @param prevValue - 前の状態値（存在しない場合はundefined）
+   * @returns 復元された状態値
+   */
   const restore = useCallback(
     (prevValue?: ReducedValue): ReducedValue => {
       if (!prevValue) {
@@ -108,7 +163,7 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
         };
       }
 
-      // re-filter the previous batch of messages
+      // 前回のメッセージバッチを再フィルタリング
       const newMatches: MessageAndData[] = [];
       for (const messageEvent of prevValue.messageEvents) {
         const queriedData = cachedGetMessagePathDataItems(path, messageEvent);
@@ -117,8 +172,8 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
         }
       }
 
-      // Return a new message set if we have matching messages or this is a different path
-      // than the path used to fetch the previous set of messages.
+      // マッチするメッセージがあるか、メッセージの前のセットを取得するために使用された
+      // パスとは異なるパスの場合、新しいメッセージセットを返す
       if (newMatches.length > 0 || path !== prevValue.path) {
         return {
           matches: newMatches.slice(-historySize),
@@ -132,6 +187,7 @@ export function useMessageDataItem(path: string, options?: Options): ReducedValu
     [cachedGetMessagePathDataItems, historySize, path],
   );
 
+  // メッセージリデューサーを使用して状態を管理
   const reducedValue = useMessageReducer<ReducedValue>({
     topics,
     addMessages,

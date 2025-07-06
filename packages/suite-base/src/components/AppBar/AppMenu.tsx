@@ -5,6 +5,32 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * AppMenu - アプリケーションメインメニューコンポーネント
+ *
+ * AppBarに表示されるメインメニューシステムです。
+ * 階層的なメニュー構造を提供し、以下の機能を含みます：
+ * - File: データソース操作（開く、接続、最近使用したファイル）
+ * - View: UI表示制御（サイドバー、レイアウト管理）
+ * - Help: ヘルプ・情報（ドキュメント、About、サンプルデータ）
+ *
+ * 特徴：
+ * - ネストメニューによる階層構造
+ * - 国際化対応（i18n）
+ * - キーボードショートカット表示
+ * - 状態に応じた動的メニュー項目
+ * - 最近使用したデータソースの履歴表示
+ *
+ * @example
+ * ```typescript
+ * <AppMenu
+ *   open={isMenuOpen}
+ *   handleClose={handleMenuClose}
+ *   anchorEl={anchorElement}
+ * />
+ * ```
+ */
+
 import { Menu, PaperProps } from "@mui/material";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,34 +50,84 @@ import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboa
 import { NestedMenuItem } from "./NestedMenuItem";
 import { AppBarMenuItem, AppMenuProps } from "./types";
 
+/**
+ * Workspace Store Selectors - ワークスペース状態セレクター
+ *
+ * パフォーマンス最適化のため、必要な状態のみを抽出するセレクター関数。
+ * これらは useWorkspaceStore フックと組み合わせて使用されます。
+ */
+
+/** 左サイドバーの開閉状態を取得 */
 const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.left.open;
+/** 右サイドバーの開閉状態を取得 */
 const selectRightSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.right.open;
 
+/**
+ * AppMenu - アプリケーションメインメニューコンポーネント
+ *
+ * アプリケーションの主要機能へのアクセスを提供するメニューシステム。
+ * 3つの主要なメニューグループ（File、View、Help）で構成されています。
+ *
+ * メニュー構造：
+ * - File: データソース管理（開く、接続、履歴）
+ * - View: UI制御（サイドバー、レイアウト）
+ * - Help: サポート情報（ドキュメント、About、デモ）
+ *
+ * 状態管理：
+ * - ネストメニューの開閉状態
+ * - サイドバーの表示状態
+ * - 最近使用したデータソースの履歴
+ *
+ * @param props - メニューコンポーネントのプロパティ
+ * @returns AppMenuのJSX要素
+ */
 export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { open, handleClose, anchorEl, anchorReference, anchorPosition, disablePortal } = props;
   const { classes } = useStyles();
   const { t } = useTranslation("appBar");
 
+  /** 現在開いているネストメニューのID */
   const [nestedMenu, setNestedMenu] = useState<string | undefined>();
 
+  /** データソース選択とhistory管理 */
   const { recentSources, selectRecent } = usePlayerSelection();
 
+  /** サイドバーの開閉状態 */
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const rightSidebarOpen = useWorkspaceStore(selectRightSidebarOpen);
+
+  /** ワークスペースとダイアログのアクション */
   const { sidebarActions, dialogActions } = useWorkspaceActions();
 
+  /**
+   * ネストメニューを閉じて、メインメニューも閉じる
+   * すべてのメニューアイテムのクリック時に呼び出される
+   */
   const handleNestedMenuClose = useCallback(() => {
     setNestedMenu(undefined);
     handleClose();
   }, [handleClose]);
 
+  /**
+   * マウスホバーでネストメニューを開く
+   * ユーザビリティ向上のため、ホバーでメニューを展開
+   */
   const handleItemPointerEnter = useCallback((id: string) => {
     setNestedMenu(id);
   }, []);
 
+  /** レイアウトのインポート・エクスポート機能 */
   const { importLayout, exportLayout } = useLayoutTransfer();
-  // FILE
 
+  /**
+   * FILE MENU ITEMS - ファイルメニュー項目
+   *
+   * データソース関連の操作を提供：
+   * - データソース選択ダイアログの表示
+   * - ローカルファイルの開く
+   * - リモート接続の開く
+   * - 最近使用したデータソースの履歴（最大5件）
+   */
   const fileItems = useMemo(() => {
     const items: AppBarMenuItem[] = [
       {
@@ -92,6 +168,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       { type: "item", label: t("recentDataSources"), key: "recent-sources", disabled: true },
     ];
 
+    // 最近使用したデータソースを最大5件まで追加
     recentSources.slice(0, 5).map((recent) => {
       items.push({
         type: "item",
@@ -115,8 +192,14 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     t,
   ]);
 
-  // VIEW
-
+  /**
+   * VIEW MENU ITEMS - ビューメニュー項目
+   *
+   * UI表示制御とレイアウト管理を提供：
+   * - 左右サイドバーの表示/非表示切り替え
+   * - レイアウトファイルのインポート/エクスポート
+   * - 状態に応じた動的なラベル表示
+   */
   const viewItems = useMemo<AppBarMenuItem[]>(
     () => [
       {
@@ -173,23 +256,38 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     ],
   );
 
-  // HELP
+  /**
+   * HELP MENU EVENT HANDLERS - ヘルプメニューイベントハンドラー
+   *
+   * ヘルプ関連の操作を提供するためのコールバック関数群
+   */
 
+  /** About ダイアログを開く */
   const onAboutClick = useCallback(() => {
     dialogActions.preferences.open("about");
     handleNestedMenuClose();
   }, [dialogActions.preferences, handleNestedMenuClose]);
 
+  /** デモデータソースを開く */
   const onDemoClick = useCallback(() => {
     dialogActions.dataSource.open("demo");
     handleNestedMenuClose();
   }, [dialogActions.dataSource, handleNestedMenuClose]);
 
+  /** ドキュメントを新しいタブで開く */
   const onDocsClick = useCallback(() => {
     window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
     handleNestedMenuClose();
   }, [handleNestedMenuClose]);
 
+  /**
+   * HELP MENU ITEMS - ヘルプメニュー項目
+   *
+   * サポート情報とドキュメントへのアクセスを提供：
+   * - About ダイアログ（アプリケーション情報）
+   * - オンラインドキュメント（外部リンク）
+   * - サンプルデータの探索
+   */
   const helpItems = useMemo<AppBarMenuItem[]>(
     () => [
       { type: "item", key: "about", label: t("about"), onClick: onAboutClick },
@@ -223,6 +321,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           } as Partial<PaperProps & { "data-tourid"?: string }>,
         }}
       >
+        {/* File メニュー: データソース操作 */}
         <NestedMenuItem
           onPointerEnter={handleItemPointerEnter}
           items={fileItems}
@@ -231,6 +330,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
         >
           {t("file")}
         </NestedMenuItem>
+
+        {/* View メニュー: UI制御とレイアウト管理 */}
         <NestedMenuItem
           onPointerEnter={handleItemPointerEnter}
           items={viewItems}
@@ -239,6 +340,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
         >
           {t("view")}
         </NestedMenuItem>
+
+        {/* Help メニュー: サポート情報 */}
         <NestedMenuItem
           onPointerEnter={handleItemPointerEnter}
           items={helpItems}

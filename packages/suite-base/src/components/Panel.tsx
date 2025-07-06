@@ -14,6 +14,101 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+/**
+ * @fileoverview Panel HOC - Lichtblickパネルシステムの中核高階コンポーネント
+ *
+ * このファイルは、Lichtblickアプリケーションにおけるパネルシステムの心臓部を担う
+ * 高階コンポーネント（HOC）を実装している。全てのパネルコンポーネントは、この
+ * Panel HOCでラップされることで、統一された機能と動作を獲得する。
+ *
+ * ## 主要機能
+ *
+ * ### 1. 設定管理システム
+ * - パネル固有の設定（config）の自動読み込み・保存
+ * - デフォルト設定とユーザー設定のマージ処理
+ * - 設定の永続化とマイグレーション対応
+ *
+ * ### 2. レイアウト統合
+ * - React Mosaicとの完全統合
+ * - パネルの分割、結合、移動、削除
+ * - タブ機能とのシームレスな連携
+ * - フルスクリーン表示機能
+ *
+ * ### 3. インタラクション制御
+ * - ドラッグ&ドロップによるパネル操作
+ * - キーボードショートカット対応
+ * - マルチ選択とバッチ操作
+ * - クイックアクション（分割、削除等）
+ *
+ * ### 4. エラーハンドリング
+ * - PanelErrorBoundaryによる例外捕捉
+ * - パネル単位での障害分離
+ * - 復旧機能（リセット、削除）
+ *
+ * ### 5. パフォーマンス最適化
+ * - React.Profilerによる性能監視
+ * - React.memoによる不要な再レンダリング防止
+ * - 遅延評価とキャッシュ戦略
+ *
+ * ## 使用方法
+ *
+ * ```typescript
+ * // パネルコンポーネントの定義
+ * interface MyPanelConfig extends PanelConfig {
+ *   title: string;
+ *   showDetails: boolean;
+ * }
+ *
+ * function MyPanelComponent({ config, saveConfig }: PanelProps<MyPanelConfig>) {
+ *   return (
+ *     <div>
+ *       <h1>{config.title}</h1>
+ *       <button onClick={() => saveConfig({ ...config, showDetails: !config.showDetails })}>
+ *         Toggle Details
+ *       </button>
+ *     </div>
+ *   );
+ * }
+ *
+ * // 必須の静的プロパティ
+ * MyPanelComponent.panelType = "MyPanel";
+ * MyPanelComponent.defaultConfig = {
+ *   title: "Default Title",
+ *   showDetails: false,
+ * };
+ *
+ * // Panel HOCでラップしてエクスポート
+ * export default Panel(MyPanelComponent);
+ * ```
+ *
+ * ## アーキテクチャ設計
+ *
+ * このHOCは以下の層構造で動作する：
+ *
+ * ```
+ * Panel HOC
+ * ├── React.Profiler (性能監視)
+ * ├── PanelContext.Provider (コンテキスト提供)
+ * ├── KeyListener (キーボードイベント)
+ * ├── Transition (フルスクリーン遷移)
+ * └── PanelRoot
+ *     ├── PanelOverlay (操作UI)
+ *     └── PanelErrorBoundary
+ *         └── 実際のパネルコンポーネント
+ * ```
+ *
+ * ## 技術的特徴
+ *
+ * - **型安全性**: TypeScriptの高度な型システムを活用
+ * - **関数型プログラミング**: useCallback、useMemoによる最適化
+ * - **宣言的UI**: React Hooksベースの状態管理
+ * - **コンポーネント合成**: HOCパターンによる機能拡張
+ * - **テスト可能性**: 依存性注入と単体テスト対応
+ *
+ * @author Lichtblick Team
+ * @since 2023
+ */
+
 import {
   Delete20Regular,
   TabDesktop20Regular,
@@ -69,7 +164,16 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/globalConstants";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
+/**
+ * Panel HOC用のスタイル定義
+ *
+ * パフォーマンス情報表示とタブカウント表示のスタイルを定義
+ */
 const useStyles = makeStyles()((theme) => ({
+  /**
+   * パフォーマンス情報表示用のスタイル
+   * 開発環境でのみ表示され、レンダリング回数と時間を表示
+   */
   perfInfo: {
     position: "absolute",
     bottom: 2,
@@ -81,6 +185,10 @@ const useStyles = makeStyles()((theme) => ({
     userSelect: "none",
     mixBlendMode: "difference",
   },
+  /**
+   * タブ内のパネル数表示用のスタイル
+   * マルチ選択時のタブ作成アクションで使用
+   */
   tabCount: {
     alignItems: "center",
     justifyContent: "center",
@@ -89,7 +197,7 @@ const useStyles = makeStyles()((theme) => ({
     inset: 0,
     textAlign: "center",
     letterSpacing: "-0.125em",
-    // Totally random numbers here to get the text to fit inside the icon
+    // アイコン内にテキストを配置するための調整値
     paddingTop: 1,
     paddingLeft: 5,
     paddingRight: 11,
@@ -98,41 +206,118 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * Panel HOCに渡されるプロパティの型定義
+ *
+ * @template Config - パネル固有の設定型
+ */
 type Props<Config> = {
+  /** パネルの一意識別子（省略時はフォールバック値を使用） */
   childId?: string;
+  /** 設定の上書き（テスト・Storybook用） */
   overrideConfig?: Config;
+  /** 所属するタブのID（タブ内パネルの場合） */
   tabId?: string;
 };
 
+/**
+ * パネルコンポーネントが実装すべき静的プロパティ
+ *
+ * Panel HOCでラップされる全てのコンポーネントは、この
+ * インターフェースを実装する必要がある。
+ *
+ * @template Config - パネル固有の設定型
+ */
 export interface PanelStatics<Config> {
+  /** パネルタイプの一意識別子 */
   panelType: string;
+  /** パネルのデフォルト設定 */
   defaultConfig: Config;
 }
 
-/** Used in storybook when panels are renered outside of a <PanelLayout/> */
+/**
+ * Storybook等でパネルが<PanelLayout/>の外部でレンダリングされる場合の
+ * フォールバック用パネルID
+ */
 const FALLBACK_PANEL_ID = "$unknown_id";
 
-// HOC that wraps panel in an error boundary and flex box.
-// Gives panel a `config` and `saveConfig`.
-//   export default Panel(MyPanelComponent)
-//
-// `config` comes from the current layout, but in stories / tests you can pass in your own:
-//   `<MyPanel config={…} />`
+/**
+ * Panel HOC - 全パネルコンポーネントをラップする高階コンポーネント
+ *
+ * このHOCは、パネルコンポーネントに以下の機能を自動的に提供する：
+ * - 設定管理（config/saveConfig）
+ * - レイアウト統合（分割、移動、削除）
+ * - エラーハンドリング
+ * - ドラッグ&ドロップ
+ * - キーボードショートカット
+ * - フルスクリーン表示
+ * - パフォーマンス監視
+ *
+ * ## 使用方法
+ *
+ * ```typescript
+ * // パネルコンポーネントの定義
+ * function MyPanel({ config, saveConfig }: PanelProps<MyPanelConfig>) {
+ *   return <div>{config.title}</div>;
+ * }
+ *
+ * // 必須の静的プロパティ
+ * MyPanel.panelType = "MyPanel";
+ * MyPanel.defaultConfig = { title: "Default" };
+ *
+ * // Panel HOCでラップ
+ * export default Panel(MyPanel);
+ * ```
+ *
+ * ## 型パラメータ
+ *
+ * @template Config - パネル固有の設定型（PanelConfigを継承）
+ * @template PanelProps - パネルコンポーネントのProps型
+ *
+ * @param PanelComponent - ラップするパネルコンポーネント
+ * @returns ラップされたパネルコンポーネント（静的プロパティ付き）
+ *
+ * ## 技術的詳細
+ *
+ * - **HOCパターン**: 横断的関心事の分離
+ * - **型安全性**: TypeScriptの高度な型システム活用
+ * - **パフォーマンス**: React.memoによる最適化
+ * - **テスト可能性**: 依存性注入とモック対応
+ *
+ * @author Lichtblick Team
+ * @since 2023
+ */
 export default function Panel<
   Config extends PanelConfig,
   PanelProps extends { config: Config; saveConfig: SaveConfig<Config> },
 >(
   PanelComponent: ComponentType<PanelProps> & PanelStatics<Config>,
 ): ComponentType<Props<Config> & Omit<PanelProps, "config" | "saveConfig">> & PanelStatics<Config> {
+  /**
+   * 実際のパネルコンポーネントをラップする内部コンポーネント
+   *
+   * このコンポーネントは、Panel HOCの中核となる機能を実装している：
+   * - 設定の読み込み・保存・マージ
+   * - レイアウト操作（分割、移動、削除）
+   * - インタラクション処理（ドラッグ、キーボード）
+   * - 状態管理（選択、フルスクリーン）
+   * - エラーハンドリング
+   *
+   * @param props - Panel HOCに渡されたプロパティ
+   */
   function ConnectedPanel(props: Props<Config>) {
     const { childId = FALLBACK_PANEL_ID, overrideConfig, tabId, ...otherProps } = props;
     const { classes, cx, theme } = useStyles();
     const isMounted = useMountedState();
 
+    // === React Mosaic統合 ===
+    // レイアウトシステムとの統合のためのコンテキスト取得
     const { mosaicActions } = useContext(MosaicContext);
     const { mosaicWindowActions }: { mosaicWindowActions: MosaicWindowActions } =
       useContext(MosaicWindowContext);
 
+    // === パネル選択状態管理 ===
+    // マルチ選択機能のための状態管理
     const {
       selectedPanelIds,
       setSelectedPanelIds,
@@ -141,15 +326,20 @@ export default function Panel<
       getSelectedPanelIds,
     } = useSelectedPanels();
 
+    /** 現在のパネルが選択されているかどうか */
     const isSelected = useMemo(
       () => selectedPanelIds.includes(childId),
       [childId, selectedPanelIds],
     );
+
+    /** 選択されている場合の選択パネル数（バッチ操作用） */
     const numSelectedPanelsIfSelected = useMemo(
       () => (isSelected ? selectedPanelIds.length : 0),
       [isSelected, selectedPanelIds],
     );
 
+    // === レイアウト操作アクション ===
+    // パネルの操作（保存、更新、作成、削除、分割、交換）のためのアクション
     const {
       savePanelConfigs,
       updatePanelConfigs,
@@ -160,42 +350,68 @@ export default function Panel<
       getCurrentLayoutState,
     } = useCurrentLayoutActions();
 
+    // === ローカル状態管理 ===
+    /** クイックアクションキー（`キー）が押されているかどうか */
     const [quickActionsKeyPressed, setQuickActionsKeyPressed] = useState(false);
+    /** パネルがフルスクリーン表示されているかどうか */
     const [fullscreen, setFullscreen] = useState(false);
+    /** フルスクリーン化前の元の位置・サイズ情報 */
     const [fullscreenSourceRect, setFullscreenSourceRect] = useState<DOMRect | undefined>(
       undefined,
     );
+    /** 子パネルがフルスクリーン表示されているかどうか（タブ用） */
     const [hasFullscreenDescendant, _setHasFullscreenDescendant] = useState(false);
+
+    // === 参照管理 ===
+    /** パネルルート要素への参照 */
     const panelRootRef = useRef<HTMLDivElement>(ReactNull);
+    /** パネルカタログへの参照 */
     const panelCatalog = usePanelCatalog();
 
+    // === パネル位置・階層情報 ===
+    /** Mosaicレイアウト内でのパネルの位置パス */
     const mosaicPath = useContext(MosaicPathContext);
+    /** トップレベルパネル（ルート直下）かどうか */
     const isTopLevelPanel =
       mosaicPath != undefined && mosaicPath.length === 0 && tabId == undefined;
 
-    // There may be a parent panel (when a panel is in a tab).
+    /** 親パネルのコンテキスト（タブ内パネルの場合） */
     const parentPanelContext = useContext(PanelContext);
 
+    // === パネル基本情報 ===
+    /** パネルタイプ */
     const type = PanelComponent.panelType;
+    /** パネルタイトル（カタログから取得） */
     const title = useMemo(
       () => panelCatalog.getPanelByType(type)?.title ?? "",
       [panelCatalog, type],
     );
 
+    // === 設定管理 ===
+    /** パネルのデフォルト設定 */
     const defaultConfig = PanelComponent.defaultConfig;
+    /** 保存済み設定の読み込みと保存関数 */
     const [savedConfig, saveConfig] = useConfigById<Config>(childId);
 
+    /**
+     * パネルを初期状態にリセットする関数
+     * エラー復旧時に使用される
+     */
     const resetPanel = useCallback(() => {
       saveConfig(defaultConfig);
     }, [defaultConfig, saveConfig]);
 
-    // PanelSettings needs useConfigById to return a complete config. If there is no saved config
-    // (or it is an empty object), or if keys have been added to the default config since it was
-    // previously saved, we save the default config provided by the panel. This typically happens
-    // when a new panel is added and the layout does not yet have a config. Even if this effect gets
-    // run more than once, we only need to save the default config once.
-    //
-    // An empty object can occur when swapping a panel
+    // === 設定の初期化処理 ===
+    /**
+     * デフォルト設定の自動保存処理
+     *
+     * 以下の場合にデフォルト設定を自動保存する：
+     * 1. 保存済み設定が存在しない場合
+     * 2. 保存済み設定が空オブジェクトの場合
+     * 3. デフォルト設定に新しいキーが追加された場合
+     *
+     * これにより、PanelSettingsが完全な設定を受け取ることができる
+     */
     const savedDefaultConfig = useRef(false);
     useLayoutEffect(() => {
       if (savedDefaultConfig.current) {
@@ -203,6 +419,7 @@ export default function Panel<
       }
 
       if (!savedConfig || Object.keys(savedConfig).length === 0) {
+        // 保存済み設定がない場合：デフォルト設定を保存
         savedDefaultConfig.current = true;
         saveConfig(defaultConfig);
       } else if (
@@ -210,18 +427,32 @@ export default function Panel<
           ([key, value]) => value != undefined && !(key in savedConfig),
         )
       ) {
+        // デフォルト設定に新しいキーが追加された場合：マージして保存
         savedDefaultConfig.current = true;
         saveConfig({ ...defaultConfig, ...savedConfig });
       }
     }, [defaultConfig, saveConfig, savedConfig]);
 
+    /**
+     * 最終的なパネル設定
+     * デフォルト設定 + 保存済み設定 + 上書き設定の順でマージ
+     */
     const panelComponentConfig = useMemo(
       () => ({ ...defaultConfig, ...savedConfig, ...overrideConfig }),
       [savedConfig, defaultConfig, overrideConfig],
     );
 
-    // Open a panel next to the current panel, of the specified `panelType`.
-    // If such a panel already exists, we update it with the new props.
+    /**
+     * 隣接パネルを開く関数
+     *
+     * 現在のパネルの隣に新しいパネルを開く。既に同じタイプのパネルが
+     * 隣接している場合は、そのパネルを更新することも可能。
+     *
+     * @param options - パネル開設オプション
+     * @param options.panelType - 開くパネルのタイプ
+     * @param options.siblingConfigCreator - 隣接パネルの設定作成関数
+     * @param options.updateIfExists - 既存パネルを更新するかどうか
+     */
     const openSiblingPanel = useCallback<OpenSiblingPanel>(
       async ({ panelType, siblingConfigCreator, updateIfExists }) => {
         const panelsState = getCurrentLayoutState().selectedLayout?.data;
@@ -231,7 +462,7 @@ export default function Panel<
 
         let siblingDefaultConfig: PanelConfig = {};
 
-        // If we can lookup the sibling panel type, try to load the default config from the panel module
+        // 隣接パネルタイプのデフォルト設定を取得
         const siblingPanelInfo = panelCatalog.getPanelByType(panelType);
         if (siblingPanelInfo) {
           const siblingModule = await siblingPanelInfo.module();
@@ -244,7 +475,7 @@ export default function Panel<
 
         const ownPath = mosaicWindowActions.getPath();
 
-        // Try to find a sibling panel and update it with the `siblingConfig`
+        // 既存の隣接パネルを更新する場合
         if (updateIfExists) {
           const lastNode = _.last(ownPath);
           const siblingPathEnd = lastNode != undefined ? getOtherBranch(lastNode) : "second";
@@ -268,7 +499,7 @@ export default function Panel<
           }
         }
 
-        // Otherwise, open new panel
+        // 新しいパネルを開く場合
         const newPanelPath = ownPath.concat("second");
         const newPanelConfig = siblingConfigCreator(siblingDefaultConfig);
         void mosaicWindowActions
@@ -296,6 +527,12 @@ export default function Panel<
       ],
     );
 
+    /**
+     * パネルを別のタイプに置き換える関数
+     *
+     * @param newPanelType - 新しいパネルタイプ
+     * @param config - 新しいパネルの設定
+     */
     const replacePanel = useCallback(
       (newPanelType: string, config: Record<string, unknown>) => {
         swapPanel({
@@ -310,22 +547,35 @@ export default function Panel<
       [childId, mosaicActions, mosaicWindowActions, swapPanel, tabId],
     );
 
+    // === ワークスペース状態 ===
+    /** パネル設定画面が開いているかどうか */
     const panelSettingsOpen = useWorkspaceStore(WorkspaceStoreSelectors.selectPanelSettingsOpen);
 
+    /**
+     * パネルルートクリックハンドラー
+     *
+     * パネル設定画面が開いている場合やマルチ選択モードの場合の
+     * パネル選択処理を行う
+     */
     const onPanelRootClick: MouseEventHandler<HTMLDivElement> = useCallback(
       (e) => {
         if (panelSettingsOpen) {
-          // Allow clicking with no modifiers to select a panel (and deselect others) when panel settings are open
-          e.stopPropagation(); // select the deepest clicked panel, not parent tab panels
+          // パネル設定画面が開いている場合：単一選択
+          e.stopPropagation(); // 親タブパネルの選択を防ぐ
           setSelectedPanelIds([childId]);
         } else if (e.metaKey || e.shiftKey || isSelected) {
-          e.stopPropagation(); // select the deepest clicked panel, not parent tab panels
+          // マルチ選択モード：選択状態をトグル
+          e.stopPropagation(); // 親タブパネルの選択を防ぐ
           togglePanelSelected(childId, tabId);
         }
       },
       [childId, tabId, togglePanelSelected, isSelected, setSelectedPanelIds, panelSettingsOpen],
     );
 
+    /**
+     * 選択されたパネルをタブにグループ化する関数
+     * 選択されたパネルを1つのタブパネルにまとめる
+     */
     const groupPanels = useCallback(() => {
       const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
       if (layout == undefined) {
@@ -339,6 +589,10 @@ export default function Panel<
       });
     }, [getCurrentLayoutState, getSelectedPanelIds, createTabPanel, childId]);
 
+    /**
+     * 選択されたパネルを個別のタブとして作成する関数
+     * 各選択パネルが独立したタブになる
+     */
     const createTabs = useCallback(() => {
       const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
       if (layout == undefined) {
@@ -352,6 +606,10 @@ export default function Panel<
       });
     }, [getCurrentLayoutState, getSelectedPanelIds, createTabPanel, childId]);
 
+    /**
+     * パネルを削除する関数
+     * Mosaicレイアウトからパネルを除去する
+     */
     const removePanel = useCallback(() => {
       closePanel({
         path: mosaicWindowActions.getPath(),
@@ -360,11 +618,21 @@ export default function Panel<
       });
     }, [closePanel, mosaicActions, mosaicWindowActions, tabId]);
 
+    /**
+     * 現在のパネルタイプを取得する関数
+     * Mosaicコンテキストから動的にパネルタイプを取得
+     */
     const getPanelType = useCallback(
       () => getPanelTypeFromMosaic(mosaicWindowActions, mosaicActions),
       [mosaicActions, mosaicWindowActions],
     );
 
+    /**
+     * パネルを分割する関数
+     *
+     * @param id - 分割するパネルのID
+     * @param direction - 分割方向（"row": 横分割, "column": 縦分割）
+     */
     const split = useCallback(
       (id: string | undefined, direction: "row" | "column") => {
         const panelType = getPanelType();
@@ -385,24 +653,42 @@ export default function Panel<
       [getCurrentLayoutState, getPanelType, mosaicActions, mosaicWindowActions, splitPanel, tabId],
     );
 
+    // === フルスクリーン機能 ===
+    /**
+     * フルスクリーン関連の関数群
+     * パネルの全画面表示とその解除を管理
+     */
     const { enterFullscreen, exitFullscreen } = useMemo(
       () => ({
+        /**
+         * フルスクリーン表示に入る
+         * 元の位置・サイズ情報を保存し、親タブのz-indexを調整
+         */
         enterFullscreen: () => {
           setFullscreenSourceRect(panelRootRef.current?.getBoundingClientRect());
           setFullscreen(true);
 
-          // When entering fullscreen for a panel within a tab, we need to adjust the ancestor
-          // tab(s)'s z-index to have our panel properly overlay other panels outside the tab.
+          // タブ内パネルがフルスクリーン化する場合、
+          // 親タブのz-indexを調整して正しくオーバーレイ表示する
           parentPanelContext?.setHasFullscreenDescendant(true);
         },
+        /**
+         * フルスクリーン表示から抜ける
+         * 遷移アニメーション用に状態は遷移完了時にクリア
+         */
         exitFullscreen: () => {
-          // Don't clear fullscreenSourceRect or hasFullscreenDescendant, they are needed during the exit transition
+          // fullscreenSourceRectとhasFullscreenDescendantは遷移アニメーション中に
+          // 必要なため、ここではクリアしない
           setFullscreen(false);
         },
       }),
       [parentPanelContext],
     );
 
+    /**
+     * 子パネルのフルスクリーン状態を設定する関数
+     * タブパネル内の子パネルがフルスクリーン化した場合に使用
+     */
     const setHasFullscreenDescendant = useCallback(
       // eslint-disable-next-line @lichtblick/no-boolean-parameters
       (value: boolean) => {
@@ -412,6 +698,11 @@ export default function Panel<
       [parentPanelContext],
     );
 
+    // === ドラッグ&ドロップ機能 ===
+    /**
+     * メッセージパスのドラッグ&ドロップ機能
+     * トピックやメッセージパスをパネルにドロップする機能
+     */
     const {
       isDragging,
       isOver,
@@ -421,10 +712,14 @@ export default function Panel<
       setMessagePathDropConfig,
     } = useMessagePathDrop();
 
-    // We use two separate sets of key handlers because the panel context and exitFullScreen
-    // change often and invalidate our key handlers during user interactions.
+    // === キーボードショートカット ===
+    /**
+     * キーボードイベントハンドラー群
+     * パネル操作のためのキーボードショートカットを定義
+     */
     const { keyUpHandlers, keyDownHandlers } = useMemo(
       () => ({
+        /** キーリリース時のハンドラー */
         keyUpHandlers: {
           Backquote: () => {
             setQuickActionsKeyPressed(false);
@@ -433,19 +728,24 @@ export default function Panel<
             setQuickActionsKeyPressed(false);
           },
         },
+        /** キー押下時のハンドラー */
         keyDownHandlers: {
+          /** Cmd+A: 全パネル選択 */
           a: (e: KeyboardEvent) => {
             e.preventDefault();
             if (e.metaKey) {
               selectAllPanels();
             }
           },
+          /** バッククォート: クイックアクション表示 */
           Backquote: () => {
             setQuickActionsKeyPressed(true);
           },
+          /** チルダ: クイックアクション表示 */
           "~": () => {
             setQuickActionsKeyPressed(true);
           },
+          /** Escape: 選択解除 */
           Escape: () => {
             if (numSelectedPanelsIfSelected > 1) {
               setSelectedPanelIds([]);
@@ -456,8 +756,12 @@ export default function Panel<
       [selectAllPanels, numSelectedPanelsIfSelected, setSelectedPanelIds],
     );
 
+    /**
+     * フルスクリーン時専用のキーボードハンドラー
+     */
     const fullScreenKeyHandlers = useMemo(
       () => ({
+        /** Escape: フルスクリーン解除 */
         Escape: () => {
           exitFullscreen();
         },
@@ -465,25 +769,41 @@ export default function Panel<
       [exitFullscreen],
     );
 
+    // === プロパティ最適化 ===
+    /** その他のプロパティの浅い比較メモ化 */
     const otherPanelProps = useShallowMemo(otherProps);
+
+    /**
+     * 子パネルコンポーネントに渡すプロパティ
+     * config、saveConfig、その他のプロパティをマージ
+     */
     const childProps = useMemo(
-      // We have to lie to TypeScript with "as PanelProps" because the "PanelProps extends {...}"
-      // constraint technically allows the panel to require the types of config/saveConfig be more
-      // specific types that aren't satisfied by the functions we pass in
+      // TypeScriptの制約により"as PanelProps"でキャストが必要
+      // PanelPropsの制約により、より具体的な型が要求される可能性があるため
       () => ({ config: panelComponentConfig, saveConfig, ...otherPanelProps }) as PanelProps,
       [otherPanelProps, panelComponentConfig, saveConfig],
     );
+
+    /** 実際の子パネルコンポーネント */
     const child = useMemo(() => <PanelComponent {...childProps} />, [childProps]);
 
+    // === パフォーマンス監視 ===
+    /** レンダリング回数のカウンター */
     const renderCount = useRef(0);
 
+    /** パフォーマンス情報表示要素への参照 */
     const perfInfo = useRef<HTMLDivElement>(ReactNull);
+
+    /** クイックアクションオーバーレイ要素への参照 */
     const quickActionsOverlayRef = useRef<HTMLDivElement>(ReactNull);
+
+    /**
+     * ドラッグ開始時のハンドラー
+     * ドラッグプレビュー画像からオーバーレイを一時的に隠す
+     */
     const onDragStart = useCallback(() => {
-      // Temporarily hide the overlay so that the panel can be shown as the drag preview image --
-      // even though the overlay is a sibling rather than a child, Chrome still includes it in the
-      // preview if it is visible. Changing the appearance in the next React render cycle is not
-      // enough; it actually needs to happen during the dragstart event.
+      // Chromeのバグ対策：ドラッグプレビュー画像にオーバーレイが
+      // 含まれないよう、一時的に透明にする
       // https://bugs.chromium.org/p/chromium/issues/detail?id=1203107
       const overlay = quickActionsOverlayRef.current;
       if (overlay) {
@@ -491,10 +811,19 @@ export default function Panel<
         setTimeout(() => (overlay.style.opacity = "1"), 0);
       }
     }, []);
+
+    // === ドラッグ機能設定 ===
+    /** ドラッグ仕様の定義 */
     const dragSpec = { tabId, panelId: childId, onDragStart };
+    /** オーバーレイ用のドラッグ機能 */
     const [connectOverlayDragSource, connectOverlayDragPreview] = usePanelDrag(dragSpec);
+    /** ツールバー用のドラッグ機能 */
     const [connectToolbarDragHandle, connectToolbarDragPreview] = usePanelDrag(dragSpec);
 
+    /**
+     * パネルオーバーレイのプロパティ
+     * 状態に応じてオーバーレイの表示・動作を制御
+     */
     const panelOverlayProps = useMemo(() => {
       const overlayProps: PanelOverlayProps = {
         open:
@@ -505,12 +834,15 @@ export default function Panel<
         dropMessage,
       };
 
+      // ドラッグ中の無効なドロップターゲット
       if (isDragging && !isValidTarget) {
         overlayProps.variant = "invalidDropTarget";
       }
+      // ドラッグ中の有効なドロップターゲット
       if (isDragging && isOver) {
         overlayProps.variant = "validDropTarget";
       }
+      // 複数選択時の表示
       if (isSelected && numSelectedPanelsIfSelected > 1) {
         overlayProps.onClickAway = () => {
           setSelectedPanelIds([]);
@@ -539,10 +871,12 @@ export default function Panel<
           },
         ];
       }
+      // クイックアクション表示時（非タブパネル）
       if (type !== TAB_PANEL_TYPE && quickActionsKeyPressed) {
         overlayProps.variant = "selected";
         overlayProps.highlightMode = "active";
       }
+      // クイックアクション時のアクション定義
       if (quickActionsKeyPressed) {
         overlayProps.actions = [
           {
@@ -589,6 +923,7 @@ export default function Panel<
       type,
     ]);
 
+    // === レンダリング ===
     return (
       <Profiler
         id={childId}
@@ -613,7 +948,7 @@ export default function Panel<
             setHasFullscreenDescendant,
             isFullscreen: fullscreen,
             tabId,
-            // disallow dragging the root panel in a layout
+            // ルートパネルはドラッグ禁止
             connectToolbarDragHandle: isTopLevelPanel ? undefined : connectToolbarDragHandle,
             setMessagePathDropConfig,
           }}
@@ -627,7 +962,7 @@ export default function Panel<
             }}
             nodeRef={panelRootRef}
             timeout={{
-              // match to transition duration inside PanelRoot
+              // PanelRoot内の遷移時間と一致させる
               exit: theme.transitions.duration.shorter,
             }}
           >
@@ -641,7 +976,7 @@ export default function Panel<
                 data-testid={cx("panel-mouseenter-container", childId)}
                 ref={(el) => {
                   panelRootRef.current = el;
-                  // disallow dragging the root panel in a layout
+                  // ルートパネルはドラッグ禁止
                   if (!isTopLevelPanel) {
                     connectOverlayDragPreview(el);
                     connectToolbarDragPreview(el);
@@ -654,7 +989,7 @@ export default function Panel<
                     {...panelOverlayProps}
                     ref={(el) => {
                       quickActionsOverlayRef.current = el;
-                      // disallow dragging the root panel in a layout
+                      // ルートパネルはドラッグ禁止
                       if (!isTopLevelPanel) {
                         connectOverlayDragSource(el);
                       }
@@ -675,6 +1010,11 @@ export default function Panel<
     );
   }
 
+  // === HOC完成 ===
+  /**
+   * React.memoでラップしたコンポーネントに静的プロパティを追加
+   * 元のパネルコンポーネントの静的プロパティを継承
+   */
   return Object.assign(React.memo(ConnectedPanel), {
     defaultConfig: PanelComponent.defaultConfig,
     panelType: PanelComponent.panelType,

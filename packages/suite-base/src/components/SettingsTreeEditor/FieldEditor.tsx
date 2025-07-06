@@ -5,6 +5,36 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * @fileoverview SettingsTreeEditor用のフィールドエディターコンポーネント
+ *
+ * 設定ツリーの個別フィールド（設定項目）を編集するためのコンポーネント群です。
+ * 様々な入力タイプ（文字列、数値、選択、色、ベクトル等）に対応し、
+ * 統一されたUIでフィールドの編集機能を提供します。
+ *
+ * 主な機能：
+ * - 12種類の入力タイプサポート（string, number, boolean, select, autocomplete, rgb, rgba, messagepath, gradient, vec2, vec3, toggle）
+ * - エラー表示とバリデーション
+ * - 読み取り専用モードと無効化状態
+ * - カスタムステータスボタン対応
+ * - 階層に応じたインデント表示
+ * - パフォーマンス最適化（React.memo）
+ *
+ * 使用例：
+ * ```tsx
+ * <FieldEditor
+ *   field={{
+ *     input: "string",
+ *     label: "名前",
+ *     value: "デフォルト値",
+ *     placeholder: "名前を入力してください"
+ *   }}
+ *   path={["settings", "general", "name"]}
+ *   actionHandler={handleAction}
+ * />
+ * ```
+ */
+
 import CancelIcon from "@mui/icons-material/Cancel";
 import ErrorIcon from "@mui/icons-material/Error";
 import {
@@ -29,11 +59,43 @@ import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 
 import { ColorGradientInput, ColorPickerInput, NumberInput, Vec2Input, Vec3Input } from "./inputs";
 
-/** Used to allow both undefined and empty string in select inputs. */
+/**
+ * select入力でundefinedと空文字列を区別するためのセンチネル値
+ * UUIDを使用してユニークな値を保証します
+ */
 const UNDEFINED_SENTINEL_VALUE = uuid();
-/** Used to avoid MUI errors when an invalid option is selected */
+
+/**
+ * select入力で無効なオプションが選択された際のMUIエラーを回避するためのセンチネル値
+ * UUIDを使用してユニークな値を保証します
+ */
 const INVALID_SENTINEL_VALUE = uuid();
 
+/**
+ * フィールドの入力コンポーネントを生成する関数
+ *
+ * フィールドの入力タイプに応じて適切な入力コンポーネントを返します。
+ * 12種類の入力タイプをサポートし、それぞれに特化した設定とイベントハンドリングを提供します。
+ *
+ * サポートする入力タイプ：
+ * - autocomplete: 自動補完付きテキスト入力
+ * - number: 数値入力（範囲、精度、ステップ指定可能）
+ * - toggle: 複数選択肢のトグルボタン
+ * - string: 文字列入力
+ * - boolean: ON/OFF切り替え
+ * - rgb: RGB色選択
+ * - rgba: RGBA色選択（透明度付き）
+ * - messagepath: メッセージパス入力
+ * - select: ドロップダウン選択
+ * - gradient: グラデーション色設定
+ * - vec3: 3次元ベクトル入力
+ * - vec2: 2次元ベクトル入力
+ *
+ * @param actionHandler - アクション実行ハンドラー
+ * @param field - フィールド定義
+ * @param path - フィールドのパス
+ * @returns 入力コンポーネント
+ */
 function FieldInput({
   actionHandler,
   field,
@@ -47,11 +109,12 @@ function FieldInput({
 
   switch (field.input) {
     case "autocomplete":
+      // 自動補完付きテキスト入力
       return (
         <Autocomplete
           className={classes.autocomplete}
           size="small"
-          freeSolo={true}
+          freeSolo={true} // 自由入力を許可
           value={field.value}
           disabled={field.disabled}
           readOnly={field.readonly}
@@ -73,11 +136,13 @@ function FieldInput({
             <TextField {...params} variant="filled" size="small" placeholder={field.placeholder} />
           )}
           onInputChange={(_event, value, reason) => {
+            // 入力による変更のみ処理（選択による変更は除外）
             if (reason === "input") {
               actionHandler({ action: "update", payload: { path, input: "autocomplete", value } });
             }
           }}
           onChange={(_event, value) => {
+            // 選択による変更を処理
             actionHandler({
               action: "update",
               payload: { path, input: "autocomplete", value: value ?? undefined },
@@ -87,6 +152,7 @@ function FieldInput({
         />
       );
     case "number":
+      // 数値入力（範囲、精度、ステップ指定可能）
       return (
         <NumberInput
           size="small"
@@ -96,22 +162,23 @@ function FieldInput({
           readOnly={field.readonly}
           placeholder={field.placeholder}
           fullWidth
-          max={field.max}
-          min={field.min}
-          precision={field.precision}
-          step={field.step}
+          max={field.max} // 最大値制限
+          min={field.min} // 最小値制限
+          precision={field.precision} // 小数点精度
+          step={field.step} // 増減ステップ
           onChange={(value) => {
             actionHandler({ action: "update", payload: { path, input: "number", value } });
           }}
         />
       );
     case "toggle":
+      // 複数選択肢のトグルボタン
       return (
         <ToggleButtonGroup
           className={classes.styledToggleButtonGroup}
           fullWidth
           value={field.value ?? UNDEFINED_SENTINEL_VALUE}
-          exclusive
+          exclusive // 単一選択モード
           disabled={field.disabled}
           size="small"
           onChange={(_event, value) => {
@@ -138,13 +205,14 @@ function FieldInput({
         </ToggleButtonGroup>
       );
     case "string":
+      // 文字列入力
       return (
         <TextField
           variant="filled"
           size="small"
           fullWidth
           disabled={field.disabled}
-          value={field.value ?? ""}
+          value={field.value ?? ""} // undefinedの場合は空文字列
           placeholder={field.placeholder}
           InputProps={{
             readOnly: field.readonly,
@@ -158,11 +226,12 @@ function FieldInput({
         />
       );
     case "boolean":
+      // ON/OFF切り替え
       return (
         <ToggleButtonGroup
           className={classes.styledToggleButtonGroup}
           fullWidth
-          value={field.value ?? false}
+          value={field.value ?? false} // undefinedの場合はfalse
           exclusive
           disabled={field.disabled}
           size="small"
@@ -180,9 +249,10 @@ function FieldInput({
         </ToggleButtonGroup>
       );
     case "rgb":
+      // RGB色選択（透明度なし）
       return (
         <ColorPickerInput
-          alphaType="none"
+          alphaType="none" // 透明度なし
           disabled={field.disabled}
           readOnly={field.readonly}
           placeholder={field.placeholder}
@@ -197,9 +267,10 @@ function FieldInput({
         />
       );
     case "rgba":
+      // RGBA色選択（透明度付き）
       return (
         <ColorPickerInput
-          alphaType="alpha"
+          alphaType="alpha" // 透明度付き
           disabled={field.disabled}
           readOnly={field.readonly}
           placeholder={field.placeholder}
@@ -213,25 +284,27 @@ function FieldInput({
         />
       );
     case "messagepath":
+      // メッセージパス入力（ROSメッセージのパス指定）
       return (
         <MessagePathInput
           variant="filled"
           path={field.value ?? ""}
           disabled={field.disabled}
           readOnly={field.readonly}
-          supportsMathModifiers={field.supportsMathModifiers}
+          supportsMathModifiers={field.supportsMathModifiers} // 数学演算子サポート
           onChange={(value) => {
             actionHandler({
               action: "update",
               payload: { path, input: "messagepath", value },
             });
           }}
-          validTypes={field.validTypes}
+          validTypes={field.validTypes} // 有効な型の制限
         />
       );
     case "select": {
-      const selectedOptionIndex = // use findIndex instead of find to avoid confusing TypeScript with union of arrays
-        field.options.findIndex((option) => option.value === field.value);
+      // ドロップダウン選択
+      // findIndexを使用してTypeScriptの配列union型の混乱を回避
+      const selectedOptionIndex = field.options.findIndex((option) => option.value === field.value);
       const selectedOption = field.options[selectedOptionIndex];
 
       const isEmpty = field.options.length === 0;
@@ -239,8 +312,8 @@ function FieldInput({
       if (!selectedOption) {
         selectValue = INVALID_SENTINEL_VALUE;
       } else if (selectValue == undefined) {
-        // We can't pass value={undefined} or we get a React error "A component is changing an
-        // uncontrolled input to be controlled" when changing the value to be non-undefined.
+        // value={undefined}を渡すとReactエラー「コンポーネントが非制御から制御に変更されています」が発生するため、
+        // センチネル値を使用
         selectValue = UNDEFINED_SENTINEL_VALUE;
       }
 
@@ -256,8 +329,7 @@ function FieldInput({
           variant="filled"
           value={selectValue}
           renderValue={(_value) => {
-            // Use field.value rather than the passed-in value so we can render the value even when
-            // it was not present in the list of options.
+            // オプションリストにない値でも表示できるよう、field.valueを直接使用
             const value = field.value;
             for (const option of field.options) {
               if (option.value === value) {
@@ -294,6 +366,7 @@ function FieldInput({
       );
     }
     case "gradient":
+      // グラデーション色設定
       return (
         <ColorGradientInput
           colors={field.value}
@@ -305,6 +378,7 @@ function FieldInput({
         />
       );
     case "vec3":
+      // 3次元ベクトル入力（X, Y, Z）
       return (
         <Vec3Input
           step={field.step}
@@ -321,6 +395,7 @@ function FieldInput({
         />
       );
     case "vec2":
+      // 2次元ベクトル入力（X, Y）
       return (
         <Vec2Input
           step={field.step}
@@ -339,10 +414,20 @@ function FieldInput({
   }
 }
 
+/**
+ * フィールドのラベル表示コンポーネント
+ *
+ * フィールドの入力タイプに応じて適切なラベル表示を行います。
+ * ベクトル入力（vec2, vec3）の場合は、各軸のラベルも表示します。
+ *
+ * @param field - フィールド定義
+ * @returns ラベル表示コンポーネント
+ */
 function FieldLabel({ field }: { field: Immutable<SettingsTreeField> }): React.JSX.Element {
   const { classes } = useStyles();
 
   if (field.input === "vec2") {
+    // 2次元ベクトル用のマルチラベル表示（X, Y）
     const labels = field.labels ?? ["X", "Y"];
     return (
       <>
@@ -373,6 +458,7 @@ function FieldLabel({ field }: { field: Immutable<SettingsTreeField> }): React.J
       </>
     );
   } else if (field.input === "vec3") {
+    // 3次元ベクトル用のマルチラベル表示（X, Y, Z）
     const labels = field.labels ?? ["X", "Y", "Z"];
     return (
       <>
@@ -403,11 +489,12 @@ function FieldLabel({ field }: { field: Immutable<SettingsTreeField> }): React.J
       </>
     );
   } else {
+    // 通常のシングルラベル表示
     return (
       <>
         <Typography
           className={classes.fieldLabel}
-          title={field.help ?? field.label}
+          title={field.help ?? field.label} // ヘルプがある場合はツールチップに表示
           variant="subtitle2"
         >
           {field.label}
@@ -417,6 +504,22 @@ function FieldLabel({ field }: { field: Immutable<SettingsTreeField> }): React.J
   }
 }
 
+/**
+ * フィールドエディターのメインコンポーネント
+ *
+ * 設定ツリーの個別フィールドを編集するためのコンポーネントです。
+ * ラベル、入力コンポーネント、エラー表示、ステータスボタンを統合して表示します。
+ *
+ * レイアウト構造：
+ * - 左側：ラベル、エラーアイコン、ステータスボタン
+ * - 右側：入力コンポーネント
+ * - 階層に応じたインデント表示
+ *
+ * @param actionHandler - アクション実行ハンドラー
+ * @param field - フィールド定義
+ * @param path - フィールドのパス
+ * @returns フィールドエディターコンポーネント
+ */
 function FieldEditorComponent({
   actionHandler,
   field,
@@ -426,25 +529,28 @@ function FieldEditorComponent({
   field: Immutable<SettingsTreeField>;
   path: readonly string[];
 }): React.JSX.Element {
+  // インデント計算（最大4階層まで）
   const indent = Math.min(path.length, 4);
   const paddingLeft = 0.75 + 2 * (indent - 1);
   const { classes, cx } = useStyles();
 
+  // カスタムステータスボタンの取得
   const { renderSettingsStatusButton } = useAppContext();
-
   const statusButton = renderSettingsStatusButton ? renderSettingsStatusButton(field) : undefined;
 
   return (
     <>
+      {/* ラベル部分（左側） */}
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="flex-end"
         gap={0.5}
-        paddingLeft={paddingLeft}
+        paddingLeft={paddingLeft} // 階層に応じたインデント
         fullHeight
       >
         {statusButton}
+        {/* エラーアイコン */}
         {field.error && (
           <Tooltip
             arrow
@@ -456,12 +562,22 @@ function FieldEditorComponent({
         )}
         <FieldLabel field={field} />
       </Stack>
+
+      {/* 入力コンポーネント部分（右側） */}
       <div className={cx(classes.fieldWrapper, { [classes.error]: field.error != undefined })}>
         <FieldInput actionHandler={actionHandler} field={field} path={path} />
       </div>
+
+      {/* 下部スペーサー */}
       <Stack paddingBottom={0.25} style={{ gridColumn: "span 2" }} />
     </>
   );
 }
 
+/**
+ * パフォーマンス最適化されたFieldEditorコンポーネント
+ *
+ * React.memoにより、propsが変更されない限り再レンダリングを防ぎます。
+ * 大量のフィールドを扱う設定ツリーでのパフォーマンス向上に寄与します。
+ */
 export const FieldEditor = React.memo(FieldEditorComponent);
