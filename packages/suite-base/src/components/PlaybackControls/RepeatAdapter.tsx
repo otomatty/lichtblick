@@ -5,6 +5,39 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * RepeatAdapter - 再生リピート機能アダプター
+ *
+ * @overview
+ * 再生が終了時に自動的に開始位置に戻るリピート機能を提供。
+ * MessagePipeline の状態を監視し、適切なタイミングでシーク操作を実行。
+ *
+ * @features
+ * - 自動リピート機能の実装
+ * - 再生終了の自動検出
+ * - 開始位置への自動シーク
+ * - 一時停止状態でも自動再生開始
+ *
+ * @architecture
+ * - MessagePipeline 状態監視
+ * - useLayoutEffect による即座の状態反映
+ * - 仮想 DOM 最適化のための分離コンポーネント
+ * - 時間比較による終了判定
+ *
+ * @performance
+ * MessagePipeline の全フレームを受信するため、
+ * 子コンポーネントへの影響を避けるために独立したコンポーネントとして実装。
+ *
+ * @usageExample
+ * ```tsx
+ * <RepeatAdapter
+ *   repeatEnabled={isRepeatOn}
+ *   play={() => player.play()}
+ *   seek={(time) => player.seek(time)}
+ * />
+ * ```
+ */
+
 import { useLayoutEffect } from "react";
 
 import { compare, Time } from "@lichtblick/rostime";
@@ -13,21 +46,49 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 
+/**
+ * RepeatAdapter のプロパティ
+ *
+ * @interface RepeatAdapterProps
+ */
 type RepeatAdapterProps = {
+  /** リピート機能の有効/無効状態 */
   repeatEnabled: boolean;
+  /** 再生開始操作のコールバック関数 */
   play: () => void;
+  /** シーク操作のコールバック関数 */
   seek: (to: Time) => void;
 };
 
+/**
+ * MessagePipeline からアクティブデータを取得するセレクター
+ *
+ * @param ctx - MessagePipelineContext
+ * @returns アクティブデータまたは undefined
+ */
 function activeDataSelector(ctx: MessagePipelineContext) {
   return ctx.playerState.activeData;
 }
 
 /**
- * RepeatAdapter handled looping from the start of playback when playback reaches the end
+ * RepeatAdapter コンポーネント
  *
- * NOTE: Because repeat adapter receives every message pipeline frame, we isolate its logic inside
- * a separate component so it does not cause virtual DOM diffing on any children.
+ * @description
+ * 再生が終了時に開始位置からのリピート再生を処理。
+ *
+ * @note
+ * RepeatAdapter は MessagePipeline の全フレームを受信するため、
+ * 子コンポーネントの仮想 DOM 比較に影響を与えないよう
+ * 独立したコンポーネントとして実装されている。
+ *
+ * @algorithm
+ * 1. MessagePipeline の状態監視
+ * 2. currentTime >= endTime の検出
+ * 3. startTime へのシーク実行
+ * 4. 再生の自動開始
+ *
+ * @param props - コンポーネントのプロパティ
+ * @returns 空の JSX 要素（UI は持たない）
  */
 export function RepeatAdapter(props: RepeatAdapterProps): React.JSX.Element {
   const { play, seek, repeatEnabled } = props;
@@ -43,13 +104,15 @@ export function RepeatAdapter(props: RepeatAdapterProps): React.JSX.Element {
     const endTime = activeData?.endTime;
     const startTime = activeData?.startTime;
 
-    // repeat logic could also live in messagePipeline but since it is only triggered
-    // from playback controls we've implemented it here for now - if there is demand
-    // to toggle repeat from elsewhere this logic can move
+    // リピートロジックは MessagePipeline 内でも実装可能だが、
+    // 再生コントロールからのみトリガーされるため、
+    // 現在はここで実装している。
+    // 他の場所からリピート切り替えが必要になった場合は、
+    // このロジックを MessagePipeline に移動することが可能。
     if (startTime && currentTime && endTime && compare(currentTime, endTime) >= 0) {
       seek(startTime);
-      // if the user turns on repeat and we are at the end, we assume they want to play from start
-      // even if paused
+      // ユーザーがリピートを有効にして再生が終了している場合、
+      // 一時停止状態でも開始位置から再生を開始する。
       play();
     }
   }, [activeData, play, repeatEnabled, seek]);

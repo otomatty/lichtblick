@@ -5,6 +5,42 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * @fileoverview SettingsTreeEditor用色選択入力コンポーネント
+ *
+ * RGB/RGBA色値の選択・編集機能を提供するコンポーネントです。
+ * テキスト入力とビジュアルカラーピッカーの両方をサポートし、
+ * 直感的な色選択体験を提供します。
+ *
+ * 主な機能：
+ * - **RGB/RGBA対応**: 透明度の有無を選択可能
+ * - **テキスト入力**: HEX形式での直接入力
+ * - **ビジュアルピッカー**: ポップオーバー形式のカラーピッカー
+ * - **色見本表示**: 選択中の色をスウォッチで確認
+ * - **値リセット**: クリアボタンによるundefined値への復帰
+ * - **無効化対応**: disabled/readOnlyモードの完全サポート
+ * - **リアルタイム更新**: 色変更の即座な反映
+ *
+ * 使用例：
+ * ```tsx
+ * // RGB色選択（透明度なし）
+ * <ColorPickerInput
+ *   alphaType="none"
+ *   value={backgroundColor}
+ *   onChange={setBackgroundColor}
+ *   placeholder="#ffffff"
+ * />
+ *
+ * // RGBA色選択（透明度付き）
+ * <ColorPickerInput
+ *   alphaType="alpha"
+ *   value={overlayColor}
+ *   onChange={setOverlayColor}
+ *   hideClearButton={false}
+ * />
+ * ```
+ */
+
 import CancelIcon from "@mui/icons-material/Cancel";
 import { TextField, Popover, IconButton, inputBaseClasses, Tooltip } from "@mui/material";
 import { useCallback, MouseEvent, useState } from "react";
@@ -15,6 +51,11 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { ColorPickerControl, useColorPickerControl } from "./ColorPickerControl";
 import { ColorSwatch } from "./ColorSwatch";
 
+/**
+ * ColorPickerInputコンポーネントのスタイル定義
+ *
+ * テキストフィールド、アイコンボタン、色見本の統合されたレイアウトを提供します。
+ */
 const useStyles = makeStyles<void, "iconButton">()((theme, _params, classes) => ({
   root: {
     position: "relative",
@@ -53,16 +94,58 @@ const useStyles = makeStyles<void, "iconButton">()((theme, _params, classes) => 
   },
 }));
 
+/**
+ * ColorPickerInputコンポーネントのプロパティ型定義
+ */
 type ColorPickerInputProps = {
+  /** 透明度サポートタイプ（"none": RGB、"alpha": RGBA） */
   alphaType: "none" | "alpha";
+  /** コンポーネントの無効化状態 */
   disabled?: boolean;
+  /** 現在の色値（HEX形式文字列またはundefined） */
   value: undefined | string;
+  /** 色値変更時のコールバック関数 */
   onChange: (value: undefined | string) => void;
+  /** プレースホルダー文字列 */
   placeholder?: string;
+  /** 読み取り専用モード */
   readOnly?: boolean;
+  /** クリアボタンの非表示フラグ */
   hideClearButton?: boolean;
 };
 
+/**
+ * 色選択入力コンポーネント
+ *
+ * RGB/RGBA色値の選択・編集を行うための統合入力コンポーネントです。
+ * テキスト入力フィールドと色見本、ポップオーバー形式のカラーピッカーを組み合わせています。
+ *
+ * @param props - ColorPickerInputPropsプロパティ
+ * @returns 色選択入力コンポーネント
+ *
+ * @example
+ * ```tsx
+ * // 基本的なRGB色選択
+ * <ColorPickerInput
+ *   alphaType="none"
+ *   value={primaryColor}
+ *   onChange={(color) => setPrimaryColor(color)}
+ *   placeholder="#007bff"
+ * />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // 透明度付きRGBA色選択
+ * <ColorPickerInput
+ *   alphaType="alpha"
+ *   value={overlayColor}
+ *   onChange={setOverlayColor}
+ *   disabled={!enableOverlay}
+ *   hideClearButton={false}
+ * />
+ * ```
+ */
 export function ColorPickerInput(props: ColorPickerInputProps): React.JSX.Element {
   const { alphaType, disabled, onChange, readOnly, hideClearButton, value } = props;
   const { classes, cx } = useStyles();

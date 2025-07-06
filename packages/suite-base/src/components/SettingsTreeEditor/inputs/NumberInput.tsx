@@ -5,6 +5,43 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/**
+ * @fileoverview SettingsTreeEditor用数値入力コンポーネント
+ *
+ * 高機能な数値入力コンポーネントを提供します。
+ * 基本的なテキスト入力に加え、マウスドラッグによる値変更、
+ * 増減ボタン、範囲制限、精度制御などの機能を備えています。
+ *
+ * 主な機能：
+ * - **マウスドラッグスクラブ**: 入力フィールド上での水平ドラッグによる値変更
+ * - **増減ボタン**: 左右のシェブロンボタンによる値の増減
+ * - **範囲制限**: min/maxプロパティによる値の制限
+ * - **精度制御**: precisionプロパティによる小数点以下の桁数制御
+ * - **ステップ制御**: stepプロパティによる増減単位の指定
+ * - **キーボード修飾子**: Shiftキー押下時の10倍速変更
+ * - **読み取り専用モード**: readOnlyプロパティによる編集禁止
+ *
+ * 使用例：
+ * ```tsx
+ * // 基本的な数値入力
+ * <NumberInput
+ *   value={speed}
+ *   onChange={setSpeed}
+ *   min={0}
+ *   max={100}
+ *   step={1}
+ * />
+ *
+ * // 小数点精度指定
+ * <NumberInput
+ *   value={ratio}
+ *   onChange={setRatio}
+ *   precision={2}
+ *   step={0.01}
+ * />
+ * ```
+ */
+
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { IconButton, TextFieldProps, TextField } from "@mui/material";
@@ -13,10 +50,19 @@ import { ReactNode, useCallback, useRef } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+/**
+ * NumberInputコンポーネントで使用される定数
+ *
+ * @constant
+ */
 const Constants = {
+  /** ドラッグスクラブ時の精度（小数点以下の桁数） */
   ScrubPrecision: 4,
 } as const;
 
+/**
+ * NumberInputコンポーネントのスタイル定義
+ */
 const useStyles = makeStyles()((theme) => ({
   iconButton: {
     "&.MuiIconButton-edgeStart": {
@@ -62,6 +108,50 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * 高機能数値入力コンポーネント
+ *
+ * マウスドラッグによる値変更、増減ボタン、範囲制限などの機能を持つ数値入力フィールドです。
+ * SettingsTreeEditorの数値フィールドで使用されます。
+ *
+ * @param props - コンポーネントプロパティ
+ * @param props.iconUp - 増加ボタンのカスタムアイコン（省略時はChevronRightIcon）
+ * @param props.iconDown - 減少ボタンのカスタムアイコン（省略時はChevronLeftIcon）
+ * @param props.max - 最大値制限
+ * @param props.min - 最小値制限
+ * @param props.precision - 小数点以下の桁数（丸め精度）
+ * @param props.readOnly - 読み取り専用モード
+ * @param props.step - 増減ステップ値
+ * @param props.value - 現在の数値
+ * @param props.onChange - 値変更時のコールバック
+ * @returns NumberInputコンポーネント
+ *
+ * @example
+ * ```tsx
+ * // 基本的な使用例
+ * <NumberInput
+ *   value={temperature}
+ *   onChange={(value) => setTemperature(value)}
+ *   min={-273.15}
+ *   max={1000}
+ *   step={0.1}
+ *   precision={1}
+ * />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // カスタムアイコンを使用
+ * <NumberInput
+ *   value={volume}
+ *   onChange={setVolume}
+ *   iconUp={<VolumeUpIcon />}
+ *   iconDown={<VolumeDownIcon />}
+ *   min={0}
+ *   max={100}
+ * />
+ * ```
+ */
 export function NumberInput(
   props: {
     iconUp?: ReactNode;

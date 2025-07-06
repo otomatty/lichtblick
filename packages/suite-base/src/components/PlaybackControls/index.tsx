@@ -15,16 +15,55 @@
 //   You may not use this file except in compliance with the License.
 
 /**
- * PlaybackControls: データ再生コントロール全体
+ * PlaybackControls - 統合再生制御コンポーネント
  *
- * 主な機能:
- * - Scrubber: 時間軸スライダーとプログレス表示
- * - PlaybackTimeDisplay: 現在時刻表示と時間入力
- * - PlaybackSpeedControls: 再生速度変更ドロップダウン
- * - 再生/一時停止/シーク操作ボタン群
- * - リピート機能とイベント作成機能
- * - キーボードショートカット (スペース: 再生/停止, 左右矢印: シーク)
- * - BroadcastManagerによるマルチインスタンス同期
+ * @overview
+ * データ再生の統合制御機能を提供するメインコンポーネント。
+ * スクラブバー、再生/一時停止、シーク、リピート、同期機能を統合し、
+ * 複数の Lichtblick インスタンス間での同期再生にも対応。
+ *
+ * @features
+ * - タイムラインスクラブバーによる直感的シーク操作
+ * - 再生/一時停止/前進/後退の基本制御
+ * - リピート再生機能
+ * - イベント作成・表示機能
+ * - インスタンス間同期機能
+ * - 再生速度制御
+ * - キーボードショートカット対応
+ * - データソース情報表示
+ *
+ * @architecture
+ * - MessagePipeline との統合
+ * - BroadcastManager による複数インスタンス同期
+ * - EventsContext によるイベント管理
+ * - WorkspaceContext による設定管理
+ * - Material UI による統一的 UI
+ *
+ * @keyboardShortcuts
+ * - Space: 再生/一時停止切り替え
+ * - 左矢印: 後退（100ms / Shift: 10ms / Alt: 500ms）
+ * - 右矢印: 前進（100ms / Shift: 10ms / Alt: 500ms）
+ *
+ * @layout
+ * 上段: スクラブバー（タイムライン）
+ * 下段: 左から時間表示・基本制御・オプション制御
+ *
+ * @syncBehavior
+ * 複数の Lichtblick インスタンス間でのBroadcastManagerによる同期:
+ * - play/pause/seek/playUntil コマンドをブロードキャスト
+ * - 受信側インスタンスでの自動同期処理
+ *
+ * @usageExample
+ * ```tsx
+ * <PlaybackControls
+ *   play={() => player.startPlayback()}
+ *   pause={() => player.pausePlayback()}
+ *   seek={(time) => player.seekPlayback(time)}
+ *   playUntil={(time) => player.playUntil(time)}
+ *   isPlaying={player.isPlaying}
+ *   getTimeInfo={() => ({ startTime, endTime, currentTime })}
+ * />
+ * ```
  */
 
 import {
