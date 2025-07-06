@@ -132,7 +132,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
             xAxisIsPlaybackTime
             yAxes={yScale}
             plugins={STATE_TRANSITION_PLUGINS}
-            interactionMode="lastX"
+            // storybookの修正箇所
+            interactionMode="x"
+            // ここまで修正
             onClick={onClick}
             currentTime={currentTimeSinceStart}
           />

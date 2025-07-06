@@ -67,6 +67,9 @@ function dragAndDrop(source: Element, target: Element): void {
 }
 
 class MockPanelCatalog implements PanelCatalog {
+  // storybookの修正箇所
+  public readonly panels = allPanels;
+  // ここまで修正
   public getPanels(): readonly PanelInfo[] {
     return allPanels;
   }

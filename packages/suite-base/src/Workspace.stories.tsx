@@ -45,7 +45,7 @@ class MockPanelCatalog implements PanelCatalog {
             () => (
               <>
                 <PanelToolbar />
-                <div>I’m a fake panel</div>
+                <div>I&apos;m a fake panel</div>
               </>
             ),
             { panelType: "Fake", defaultConfig: {} },
@@ -92,16 +92,19 @@ class MockPanelCatalog implements PanelCatalog {
     },
   };
 
+  // storybookの修正箇所
+  public readonly panels = [
+    MockPanelCatalog.#fakePanel,
+    MockPanelCatalog.#droppablePanel,
+    { title: "Tab", type: "Tab", module: async () => ({ default: Tab }) },
+  ];
   public getPanels(): readonly PanelInfo[] {
-    return [
-      MockPanelCatalog.#fakePanel,
-      MockPanelCatalog.#droppablePanel,
-      { title: "Tab", type: "Tab", module: async () => ({ default: Tab }) },
-    ];
+    return this.panels;
   }
   public getPanelByType(type: string): PanelInfo | undefined {
-    return this.getPanels().find((panel) => panel.type === type);
+    return this.panels.find((panel) => panel.type === type);
   }
+  // ここまで修正
 }
 
 export const Basic: StoryObj<{ initialLayoutState: Partial<LayoutData> }> = {

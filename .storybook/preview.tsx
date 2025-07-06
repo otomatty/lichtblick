@@ -16,8 +16,13 @@ import GlobalCss from "@lichtblick/suite-base/components/GlobalCss";
 import MultiProvider from "@lichtblick/suite-base/components/MultiProvider";
 import StudioToastProvider from "@lichtblick/suite-base/components/StudioToastProvider";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
+// storybookの修正箇所
+import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { initI18n, Language } from "@lichtblick/suite-base/i18n";
+import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
+import StorybookMockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/StorybookMockLayoutManager";
+// ここまで修正
 import ReadySignalContext from "@lichtblick/suite-base/stories/ReadySignalContext";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAppConfiguration";
@@ -77,10 +82,14 @@ function StudioContextProviders({
   const needsCombinedReadySignal = colorScheme.startsWith("both");
   const [readySignal1, readySignal2] = useCombinedReadySignal(readySignal);
 
+  const mockLayoutManager = useMemo(() => new StorybookMockLayoutManager(), []);
+
   const providers = [
     /* eslint-disable react/jsx-key */
     <AppConfigurationContext.Provider value={appConfiguration} />,
+    <AppParametersProvider appParameters={{}} />,
     <ReadySignalContext.Provider value={readySignal} />,
+    <LayoutManagerContext.Provider value={mockLayoutManager} />,
     <StudioToastProvider />,
     <TimelineInteractionStateProvider />,
     /* eslint-enable react/jsx-key */

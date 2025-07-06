@@ -121,9 +121,9 @@ function makeMockPanelCatalog(t: TFunction<"panels">): PanelCatalog {
   const visiblePanels = [...panels.getBuiltin(t)];
 
   return {
-    getPanels() {
-      return visiblePanels;
-    },
+    // storybookの修正箇所
+    panels: visiblePanels,
+    // ここまで修正
     getPanelByType(type: string) {
       return allPanels.find((panel) => panel.type === type);
     },

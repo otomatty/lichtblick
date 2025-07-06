@@ -27,7 +27,12 @@ import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAp
 import { UnconnectedPanelLayout } from "./PanelLayout";
 
 class MockPanelCatalog implements PanelCatalog {
-  public constructor(private allPanels: PanelInfo[]) {}
+  // storybookの修正箇所
+  public readonly panels: readonly PanelInfo[];
+  public constructor(private allPanels: PanelInfo[]) {
+    this.panels = allPanels;
+  }
+  // ここまで修正
   public getPanels(): readonly PanelInfo[] {
     return this.allPanels;
   }

@@ -1,0 +1,194 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+// SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+//   Copyright 2018-2021 Cruise LLC
+//
+//   This source code is licensed under the Apache License, Version 2.0,
+//   found at http://www.apache.org/licenses/LICENSE-2.0
+//   You may not use this file except in compliance with the License.
+/**
+ * PlaybackControls: データ再生コントロール全体
+ *
+ * 主な機能:
+ * - Scrubber: 時間軸スライダーとプログレス表示
+ * - PlaybackTimeDisplay: 現在時刻表示と時間入力
+ * - PlaybackSpeedControls: 再生速度変更ドロップダウン
+ * - 再生/一時停止/シーク操作ボタン群
+ * - リピート機能とイベント作成機能
+ * - キーボードショートカット (スペース: 再生/停止, 左右矢印: シーク)
+ * - BroadcastManagerによるマルチインスタンス同期
+ */
+import { ArrowRepeatAll20Regular, ArrowRepeatAllOff20Regular, Info20Regular, Next20Filled, Next20Regular, Pause20Filled, Pause20Regular, Play20Filled, Play20Regular, Previous20Filled, Previous20Regular, } from "@fluentui/react-icons";
+import { Tooltip } from "@mui/material";
+import { useCallback, useMemo, useState } from "react";
+import { makeStyles } from "tss-react/mui";
+import { compare } from "@lichtblick/rostime";
+import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
+import { DataSourceInfoView } from "@lichtblick/suite-base/components/DataSourceInfoView";
+import EventIcon from "@lichtblick/suite-base/components/EventIcon";
+import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIcon";
+import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
+import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { useMessagePipeline, } from "@lichtblick/suite-base/components/MessagePipeline";
+import SyncInstanceToggle from "@lichtblick/suite-base/components/PlaybackControls/SwitchSyncInstances/SyncInstanceToggle";
+import PlaybackSpeedControls from "@lichtblick/suite-base/components/PlaybackSpeedControls";
+import Stack from "@lichtblick/suite-base/components/Stack";
+import { useCurrentUser } from "@lichtblick/suite-base/context/BaseUserContext";
+import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
+import { useWorkspaceStore, } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
+import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { PlayerPresence } from "@lichtblick/suite-base/players/types";
+import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
+import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
+import { RepeatAdapter } from "./RepeatAdapter";
+import Scrubber from "./Scrubber";
+import { DIRECTION, jumpSeek } from "./sharedHelpers";
+const useStyles = makeStyles()((theme) => ({
+    root: {
+        display: "flex",
+        flexDirection: "column",
+        padding: theme.spacing(0.5, 1, 1, 1),
+        position: "relative",
+        backgroundColor: theme.palette.background.paper,
+        borderTop: `1px solid ${theme.palette.divider}`,
+        zIndex: 100000,
+        overflowX: "auto",
+    },
+    scrubberWrapper: {
+        position: "sticky",
+        top: 0,
+        right: 0,
+        left: 0,
+    },
+    disabled: {
+        opacity: theme.palette.action.disabledOpacity,
+    },
+    popper: {
+        "&[data-popper-placement*=top] .MuiTooltip-tooltip": {
+            margin: theme.spacing(0.5, 0.5, 0.75),
+        },
+    },
+    dataSourceInfoButton: {
+        cursor: "default",
+    },
+}));
+const selectPresence = (ctx) => ctx.playerState.presence;
+const selectEventsSupported = (store) => store.eventsSupported;
+const selectPlaybackRepeat = (store) => store.playbackControls.repeat;
+export default function PlaybackControls({ play, pause, seek, playUntil, isPlaying, getTimeInfo, }) {
+    const presence = useMessagePipeline(selectPresence);
+    const { classes, cx } = useStyles();
+    const repeat = useWorkspaceStore(selectPlaybackRepeat);
+    const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
+    const { currentUserType } = useCurrentUser();
+    const eventsSupported = useEvents(selectEventsSupported);
+    const { playbackControlActions: { setRepeat }, } = useWorkspaceActions();
+    const toggleRepeat = useCallback(() => {
+        setRepeat((old) => !old);
+    }, [setRepeat]);
+    const togglePlayPause = useCallback(() => {
+        const { startTime: start, endTime: end, currentTime: current } = getTimeInfo();
+        if (isPlaying) {
+            pause();
+            BroadcastManager.getInstance().postMessage({
+                type: "pause",
+                time: current,
+            });
+        }
+        else {
+            // if we are at the end, we need to go back to start
+            if (current && end && start && compare(current, end) >= 0) {
+                seek(start);
+            }
+            play();
+            BroadcastManager.getInstance().postMessage({
+                type: "play",
+                time: current,
+            });
+        }
+    }, [isPlaying, pause, getTimeInfo, play, seek]);
+    const seekForwardAction = useCallback((ev) => {
+        const { currentTime } = getTimeInfo();
+        if (!currentTime) {
+            return;
+        }
+        // If playUntil is available, we prefer to use that rather than seek, which performs a jump
+        // seek.
+        //
+        // Playing forward up to the desired seek time will play all messages to the panels which
+        // mirrors the behavior panels would expect when playing without stepping. This behavior is
+        // important for some message types which convey state information.
+        //
+        // i.e. Skipping coordinate frame messages may result in incorrectly rendered markers or
+        // missing markers altogther.
+        const targetTime = jumpSeek(DIRECTION.FORWARD, currentTime, ev);
+        if (playUntil) {
+            playUntil(targetTime);
+            BroadcastManager.getInstance().postMessage({
+                type: "playUntil",
+                time: targetTime,
+            });
+        }
+        else {
+            seek(targetTime);
+            BroadcastManager.getInstance().postMessage({
+                type: "seek",
+                time: targetTime,
+            });
+        }
+    }, [getTimeInfo, playUntil, seek]);
+    const seekBackwardAction = useCallback((ev) => {
+        const { currentTime } = getTimeInfo();
+        if (!currentTime) {
+            return;
+        }
+        const targetTime = jumpSeek(DIRECTION.BACKWARD, currentTime, ev);
+        seek(targetTime);
+        BroadcastManager.getInstance().postMessage({
+            type: "seek",
+            time: targetTime,
+        });
+    }, [getTimeInfo, seek]);
+    const keyDownHandlers = useMemo(() => ({
+        " ": togglePlayPause,
+        ArrowLeft: (ev) => {
+            seekBackwardAction(ev);
+        },
+        ArrowRight: (ev) => {
+            seekForwardAction(ev);
+        },
+    }), [seekBackwardAction, seekForwardAction, togglePlayPause]);
+    const toggleCreateEventDialog = useCallback(() => {
+        pause();
+        setCreateEventDialogOpen((open) => !open);
+    }, [pause]);
+    const disableControls = presence === PlayerPresence.ERROR;
+    return (_jsxs(_Fragment, { children: [_jsx(RepeatAdapter, { play: play, seek: seek, repeatEnabled: repeat }), _jsx(KeyListener, { global: true, keyDownHandlers: keyDownHandlers }), _jsxs("div", { className: classes.root, children: [_jsx("div", { className: classes.scrubberWrapper, children: _jsx(Scrubber, { onSeek: seek }) }), _jsxs(Stack, { direction: "row", alignItems: "center", flex: 1, gap: 1, children: [_jsxs(Stack, { direction: "row", alignItems: "center", flex: 1, gap: 0.5, children: [currentUserType !== "unauthenticated" && eventsSupported && (_jsx(HoverableIconButton, { size: "small", title: "Create event", icon: _jsx(EventOutlinedIcon, {}), activeIcon: _jsx(EventIcon, {}), onClick: toggleCreateEventDialog })), _jsx(Tooltip
+                                    // A desired workflow is the ability to copy data source info text (start, end, duration)
+                                    // from the tooltip. However, there's a UX quirk where the tooltip will close if the user
+                                    // clicks on the <HoverableIconButton> and then goes to copy text from the tooltip.
+                                    //
+                                    // Disabling the focus listener fixes this quirk and the tooltip behaves as expected.
+                                    // https://mui.com/material-ui/api/tooltip/#prop-disableFocusListener
+                                    , { 
+                                        // A desired workflow is the ability to copy data source info text (start, end, duration)
+                                        // from the tooltip. However, there's a UX quirk where the tooltip will close if the user
+                                        // clicks on the <HoverableIconButton> and then goes to copy text from the tooltip.
+                                        //
+                                        // Disabling the focus listener fixes this quirk and the tooltip behaves as expected.
+                                        // https://mui.com/material-ui/api/tooltip/#prop-disableFocusListener
+                                        disableFocusListener: true, classes: { popper: classes.popper }, title: _jsx(Stack, { paddingY: 0.75, children: _jsx(DataSourceInfoView, { disableSource: true }) }), children: _jsx(HoverableIconButton, { className: cx(classes.dataSourceInfoButton, {
+                                                [classes.disabled]: disableControls,
+                                            }), size: "small", icon: _jsx(Info20Regular, {}) }) }), _jsx(PlaybackTimeDisplay, { onSeek: seek, onPause: pause })] }), _jsxs(Stack, { direction: "row", alignItems: "center", gap: 1, children: [_jsx(HoverableIconButton, { disabled: disableControls, size: "small", title: "Seek backward", icon: _jsx(Previous20Regular, {}), activeIcon: _jsx(Previous20Filled, {}), onClick: () => {
+                                            seekBackwardAction();
+                                        } }), _jsx(HoverableIconButton, { disabled: disableControls, size: "small", title: isPlaying ? "Pause" : "Play", onClick: togglePlayPause, icon: isPlaying ? _jsx(Pause20Regular, {}) : _jsx(Play20Regular, {}), activeIcon: isPlaying ? _jsx(Pause20Filled, {}) : _jsx(Play20Filled, {}), "data-testid": "play-button" }), _jsx(HoverableIconButton, { disabled: disableControls, size: "small", title: "Seek forward", icon: _jsx(Next20Regular, {}), activeIcon: _jsx(Next20Filled, {}), onClick: () => {
+                                            seekForwardAction();
+                                        } })] }), _jsxs(Stack, { direction: "row", flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 0.5, children: [_jsx(SyncInstanceToggle, {}), _jsx(HoverableIconButton, { size: "small", title: "Loop playback", color: repeat ? "primary" : "inherit", onClick: toggleRepeat, icon: repeat ? _jsx(ArrowRepeatAll20Regular, {}) : _jsx(ArrowRepeatAllOff20Regular, {}) }), _jsx(PlaybackSpeedControls, {})] })] }), createEventDialogOpen && eventsSupported && (_jsx(CreateEventDialog, { onClose: toggleCreateEventDialog }))] })] }));
+}

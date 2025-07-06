@@ -1,0 +1,42 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
+import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
+import { IterablePlayer, WorkerIterableSource, } from "@lichtblick/suite-base/players/IterablePlayer";
+class Ros1LocalBagDataSourceFactory {
+    id = "ros1-local-bagfile";
+    type = "file";
+    displayName = "ROS 1 Bag";
+    iconName = "OpenFile";
+    supportedFileTypes = [AllowedFileExtensions.BAG];
+    initialize(args) {
+        const files = args.files ?? [];
+        if (args.file) {
+            files.push(args.file);
+        }
+        if (files.length === 0) {
+            return;
+        }
+        const file = files[0];
+        if (!file) {
+            return;
+        }
+        const source = new WorkerIterableSource({
+            initWorker: () => {
+                return new Worker(
+                // foxglove-depcheck-used: babel-plugin-transform-import-meta
+                new URL("@lichtblick/suite-base/players/IterablePlayer/BagIterableSourceWorker.worker", import.meta.url));
+            },
+            initArgs: { file },
+        });
+        return new IterablePlayer({
+            metricsCollector: args.metricsCollector,
+            source,
+            name: file.name,
+            sourceId: this.id,
+        });
+    }
+}
+export default Ros1LocalBagDataSourceFactory;

@@ -1,0 +1,57 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+import FoxgloveWebSocketPlayer from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer";
+export default class FoxgloveWebSocketDataSourceFactory {
+    id = "foxglove-websocket";
+    type = "connection";
+    displayName = "Foxglove WebSocket";
+    iconName = "Flow";
+    description = "Connect to a ROS 1, ROS 2, or custom system using the Foxglove WebSocket protocol. For ROS systems, be sure to first install the foxglove_bridge ROS package.";
+    docsLinks = [
+        {
+            label: "ROS 1",
+            url: "https://docs.foxglove.dev/docs/connecting-to-data/frameworks/ros1#foxglove-websocket",
+        },
+        {
+            label: "ROS 2",
+            url: "https://docs.foxglove.dev/docs/connecting-to-data/frameworks/ros2#foxglove-websocket",
+        },
+        {
+            label: "custom data",
+            url: "https://docs.foxglove.dev/docs/connecting-to-data/frameworks/custom#foxglove-websocket",
+        },
+    ];
+    formConfig = {
+        fields: [
+            {
+                id: "url",
+                label: "WebSocket URL",
+                defaultValue: "ws://localhost:8765",
+                validate: (newValue) => {
+                    try {
+                        const url = new URL(newValue);
+                        if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+                            return new Error(`Invalid protocol: ${url.protocol}`);
+                        }
+                        return undefined;
+                    }
+                    catch (err) {
+                        console.error(err);
+                        return new Error("Enter a valid url");
+                    }
+                },
+            },
+        ],
+    };
+    initialize(args) {
+        const url = args.params?.url;
+        if (!url) {
+            return;
+        }
+        return new FoxgloveWebSocketPlayer({
+            url,
+            metricsCollector: args.metricsCollector,
+            sourceId: this.id,
+        });
+    }
+}

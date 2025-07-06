@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+//   Copyright 2019-2021 Cruise LLC
+//
+//   This source code is licensed under the Apache License, Version 2.0,
+//   found at http://www.apache.org/licenses/LICENSE-2.0
+//   You may not use this file except in compliance with the License.
+export const inWebWorker = () => {
+    return (typeof global.postMessage !== "undefined" &&
+        typeof WorkerGlobalScope !== "undefined" &&
+        self instanceof WorkerGlobalScope);
+};
+// To debug shared workers, enter 'chrome://inspect/#workers' into the url bar.
+export const inSharedWorker = () => typeof SharedWorkerGlobalScope !== "undefined" && self instanceof SharedWorkerGlobalScope;
+export const enforceFetchIsBlocked = (fn) => {
+    const canFetch = typeof fetch !== "undefined"
+        ? fetch("data:test")
+            .then(() => true)
+            .catch(() => false)
+        : false;
+    return async (...args) => {
+        if (await canFetch) {
+            throw new Error("Content security policy too loose.");
+        }
+        return fn(...args);
+    };
+};

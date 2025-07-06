@@ -1,0 +1,21 @@
+import { DiagnosticId, DiagnosticInfo } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
+import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+export type DiagnosticSummaryConfig = {
+    minLevel: number;
+    pinnedIds: DiagnosticId[];
+    topicToRender: string;
+    hardwareIdFilter: string;
+    sortByLevel?: boolean;
+    secondsUntilStale?: number;
+};
+export type DiagnosticsById = Map<DiagnosticId, DiagnosticInfo>;
+export type NodeRowProps = {
+    info: DiagnosticInfo;
+    isPinned: boolean;
+    onClick: (info: DiagnosticInfo) => void;
+    onClickPin: (info: DiagnosticInfo) => void;
+};
+export type DiagnosticSummaryProps = {
+    config: DiagnosticSummaryConfig;
+    saveConfig: SaveConfig<DiagnosticSummaryConfig>;
+};

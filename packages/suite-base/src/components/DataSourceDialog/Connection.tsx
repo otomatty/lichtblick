@@ -23,6 +23,24 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { FormField } from "./FormField";
 import View from "./View";
 
+/**
+ * Connection コンポーネント用のスタイル定義
+ *
+ * レスポンシブデザインに対応したグリッドレイアウトとタブ表示の
+ * スタイリングを提供します。
+ *
+ * ## レイアウト構造
+ * - **モバイル**: 縦方向のスタック配置
+ * - **デスクトップ**: 2カラムグリッドレイアウト
+ *   - ヘッダー: 全幅
+ *   - サイドバー: 240px固定幅（接続タイプ選択）
+ *   - フォーム: 残り幅（接続設定フォーム）
+ *
+ * ## 特徴的なスタイル
+ * - タブインジケーターのカスタマイズ
+ * - フォーム高さの動的調整
+ * - アイコンとテキストの配置調整
+ */
 const useStyles = makeStyles()((theme) => ({
   grid: {
     padding: theme.spacing(4, 4, 0),
@@ -86,8 +104,87 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * ワークスペースストアからデータソースダイアログの状態を選択するセレクター
+ */
 const selectDataSourceDialog = (store: WorkspaceContextStore) => store.dialogs.dataSource;
 
+/**
+ * リモート接続設定コンポーネント
+ *
+ * このコンポーネントは、Lichtblickアプリケーションでリモートデータソースへの
+ * 接続を設定するためのインターフェースを提供します。
+ *
+ * ## 主な機能
+ *
+ * ### 動的接続タイプ管理
+ * - 利用可能な接続タイプの自動検出
+ * - 有効/無効状態の管理
+ * - 接続タイプ別のアイコンと表示名
+ *
+ * ### 動的フォーム生成
+ * - 接続タイプに応じたフォームフィールドの動的生成
+ * - バリデーション機能付きフォーム入力
+ * - デフォルト値の自動設定
+ *
+ * ### レスポンシブUI
+ * - モバイル: 横スクロール可能なタブ
+ * - デスクトップ: 縦方向タブ + 2カラムレイアウト
+ * - 画面サイズに応じたレイアウト調整
+ *
+ * ### 状態管理
+ * - 選択中の接続タイプ
+ * - フォーム入力値
+ * - バリデーションエラー
+ * - アクティブなデータソース
+ *
+ * ## 接続フロー
+ *
+ * 1. **接続タイプ選択**: 利用可能な接続タイプから選択
+ * 2. **パラメータ入力**: 選択したタイプに応じたフォーム入力
+ * 3. **バリデーション**: 入力値の検証
+ * 4. **接続実行**: 設定完了後の接続開始
+ *
+ * ## レイアウト構造
+ * ```
+ * Connection
+ * ├── Header ("Open a new connection")
+ * ├── Sidebar (接続タイプ選択タブ)
+ * │   ├── Tab 1 (ROS, WebSocket等)
+ * │   ├── Tab 2
+ * │   └── ...
+ * └── Form (選択された接続タイプの設定フォーム)
+ *     ├── 警告/エラー表示
+ *     ├── 説明文
+ *     ├── 動的フォームフィールド
+ *     └── ドキュメントリンク
+ * ```
+ *
+ * ## 接続タイプの例
+ * - **ROS**: Robot Operating System接続
+ * - **WebSocket**: WebSocket接続
+ * - **Foxglove WebSocket**: Foxglove専用WebSocket
+ * - **MCAP**: MCAP形式のリモートファイル
+ * - **その他**: プラグインによる拡張可能
+ *
+ * ## エラーハンドリング
+ * - 接続タイプが無効な場合の警告表示
+ * - フォームバリデーションエラーの表示
+ * - 接続失敗時のエラー処理
+ *
+ * ## アナリティクス
+ * - 接続タイプ選択の追跡
+ * - 接続成功/失敗の追跡
+ * - ダイアログ操作の追跡
+ *
+ * @returns リモート接続設定画面のReactコンポーネント
+ *
+ * @example
+ * ```tsx
+ * // DataSourceDialog内での使用例
+ * {currentView === "connection" && <Connection />}
+ * ```
+ */
 export default function Connection(): React.JSX.Element {
   const { classes } = useStyles();
   const theme = useTheme();
@@ -99,14 +196,33 @@ export default function Connection(): React.JSX.Element {
   const { availableSources, selectSource } = usePlayerSelection();
   const analytics = useAnalytics();
 
-  // connectionSources is the list of availableSources supporting "connections"
+  /**
+   * 接続タイプのフィルタリング
+   *
+   * 利用可能なデータソースから接続タイプ（type: "connection"）のみを
+   * 抽出し、非表示設定されていないものを返します。
+   *
+   * @returns 接続可能なデータソースの配列
+   */
   const connectionSources = useMemo(() => {
     return availableSources.filter((source) => {
       return source.type === "connection" && source.hidden !== true;
     });
   }, [availableSources]);
 
-  // List enabled sources before disabled sources so the default selected item is an available source
+  /**
+   * 有効な接続タイプを優先した並び順の生成
+   *
+   * 有効な接続タイプを先頭に配置し、無効なものを後に配置することで、
+   * デフォルトで選択される接続タイプが使用可能になるようにします。
+   *
+   * ## 並び順の理由
+   * - 有効な接続タイプが最初に選択される
+   * - ユーザーが即座に使用可能な選択肢を確認できる
+   * - 無効な接続タイプも表示して機能の存在を示す
+   *
+   * @returns 有効な接続タイプを先頭にした配列
+   */
   const enabledSourcesFirst = useMemo(() => {
     const enabledSources = connectionSources.filter((source) => source.disabledReason == undefined);
     const disabledSources = connectionSources.filter(
@@ -115,6 +231,14 @@ export default function Connection(): React.JSX.Element {
     return [...enabledSources, ...disabledSources];
   }, [connectionSources]);
 
+  /**
+   * 選択中の接続タイプのインデックス状態
+   *
+   * 初期値は現在アクティブなデータソースに基づいて設定され、
+   * 見つからない場合は最初の接続タイプ（通常は有効なもの）が選択されます。
+   *
+   * 初期化時にアナリティクスイベントも送信されます。
+   */
   const [selectedConnectionIdx, setSelectedConnectionIdx] = useState<number>(() => {
     const foundIdx = connectionSources.findIndex((source) => source === activeDataSource);
     const selectedIdx = foundIdx < 0 ? 0 : foundIdx;
@@ -125,14 +249,39 @@ export default function Connection(): React.JSX.Element {
     return selectedIdx;
   });
 
+  /**
+   * 現在選択されている接続ソース
+   *
+   * selectedConnectionIdxに基づいて、対応する接続ソースオブジェクトを返します。
+   * このオブジェクトには接続タイプの詳細情報、フォーム設定、アイコンなどが含まれます。
+   */
   const selectedSource = useMemo(
     () => enabledSourcesFirst[selectedConnectionIdx],
     [enabledSourcesFirst, selectedConnectionIdx],
   );
 
+  /**
+   * フォームフィールドのバリデーションエラー状態
+   *
+   * フィールドIDをキーとして、対応するエラーメッセージを保持します。
+   * この状態は接続ボタンの有効/無効状態の判定にも使用されます。
+   */
   const [fieldErrors, setFieldErrors] = useState(new Map<string, string>());
+
+  /**
+   * フォームフィールドの入力値状態
+   *
+   * フィールドIDをキーとして、ユーザーが入力した値を保持します。
+   * 接続実行時にこの値がパラメータとして使用されます。
+   */
   const [fieldValues, setFieldValues] = useState<Record<string, string | undefined>>({});
 
+  /**
+   * アクティブなデータソースの変更に応じた選択状態の同期
+   *
+   * 外部からアクティブなデータソースが変更された場合、
+   * 対応する接続タイプが選択されるように状態を更新します。
+   */
   useLayoutEffect(() => {
     const connectionIdx = connectionSources.findIndex((source) => source === activeDataSource);
     if (connectionIdx >= 0) {
@@ -140,7 +289,17 @@ export default function Connection(): React.JSX.Element {
     }
   }, [activeDataSource, connectionSources]);
 
-  // clear field values when the user changes the source tab
+  /**
+   * 接続タイプ変更時のフォーム値リセット
+   *
+   * ユーザーが接続タイプを変更した際に、新しい接続タイプの
+   * デフォルト値でフォームフィールドを初期化します。
+   *
+   * ## 処理内容
+   * - 既存のフォーム値をクリア
+   * - 新しい接続タイプのデフォルト値を設定
+   * - バリデーションエラーをクリア
+   */
   useLayoutEffect(() => {
     const defaultFieldValues: Record<string, string | undefined> = {};
     for (const field of selectedSource?.formConfig?.fields ?? []) {
@@ -151,6 +310,20 @@ export default function Connection(): React.JSX.Element {
     setFieldValues(defaultFieldValues);
   }, [selectedSource]);
 
+  /**
+   * 接続実行処理
+   *
+   * 現在選択されている接続タイプと入力されたパラメータを使用して
+   * 実際の接続を開始します。
+   *
+   * ## 処理フロー
+   * 1. 選択されたソースの存在確認
+   * 2. 接続パラメータの設定
+   * 3. アナリティクスイベントの送信
+   * 4. ダイアログの閉じる
+   *
+   * @callback onOpen
+   */
   const onOpen = useCallback(() => {
     if (!selectedSource) {
       return;
@@ -167,8 +340,23 @@ export default function Connection(): React.JSX.Element {
     dialogActions.dataSource,
   ]);
 
+  /**
+   * 接続ボタンの有効/無効状態の判定
+   *
+   * 以下の条件のいずれかが満たされる場合、接続ボタンは無効になります：
+   * - 選択された接続タイプが無効（disabledReason が存在）
+   * - フォームにバリデーションエラーが存在
+   */
   const disableOpen = selectedSource?.disabledReason != undefined || fieldErrors.size > 0;
 
+  /**
+   * フォーム送信処理
+   *
+   * Enter キーやフォーム送信ボタンによる送信を処理します。
+   * 接続ボタンが有効な場合のみ接続処理を実行します。
+   *
+   * @param event - フォーム送信イベント
+   */
   const onSubmit = useCallback(
     (event: FormEvent) => {
       event.preventDefault();

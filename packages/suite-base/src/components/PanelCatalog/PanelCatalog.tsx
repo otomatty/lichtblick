@@ -103,7 +103,9 @@ export const PanelCatalog = forwardRef<HTMLDivElement, Props>(function PanelCata
 
   const namespacedPanels = useMemo(() => {
     // Remove namespace if panel title is unique.
-    const panels = panelCatalog.getPanels();
+    // storybookの修正箇所
+    const panels = panelCatalog.panels;
+    // ここまで修正
     const countByTitle = _.countBy(panels, (panel) => panel.title);
     return panels.map((panel) => {
       if ((countByTitle[panel.title] ?? 0) > 1) {
