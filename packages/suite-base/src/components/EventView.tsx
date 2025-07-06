@@ -73,6 +73,20 @@ const useStyles = makeStyles<void, "eventMetadata" | "eventSelected">()(
   }),
 );
 
+/**
+ * Formats the duration of an event into a human-readable string.
+ * Converts nanoseconds to appropriate units (seconds, milliseconds, microseconds, nanoseconds).
+ *
+ * @param event - The data source event containing duration information
+ * @returns A formatted duration string with appropriate units
+ *
+ * @example
+ * ```typescript
+ * formatEventDuration({ durationNanos: "1000000000" }) // "1s"
+ * formatEventDuration({ durationNanos: "1000000" }) // "1ms"
+ * formatEventDuration({ durationNanos: "0" }) // "-"
+ * ```
+ */
 function formatEventDuration(event: DataSourceEvent) {
   if (event.durationNanos === "0") {
     // instant
@@ -100,16 +114,43 @@ function formatEventDuration(event: DataSourceEvent) {
   return `${event.durationNanos}ns`;
 }
 
-function EventViewComponent(params: {
+/**
+ * Props for the EventViewComponent
+ */
+type EventViewComponentProps = {
+  /** The timeline positioned event to display */
   event: TimelinePositionedEvent;
+  /** Filter string for highlighting text */
   filter: string;
+  /** Pre-formatted time string for display */
   formattedTime: string;
+  /** Whether the event is currently being hovered */
   isHovered: boolean;
+  /** Whether the event is currently selected */
   isSelected: boolean;
+  /** Callback when the event is clicked */
   onClick: (event: TimelinePositionedEvent) => void;
+  /** Callback when hover starts */
   onHoverStart: (event: TimelinePositionedEvent) => void;
+  /** Callback when hover ends */
   onHoverEnd: (event: TimelinePositionedEvent) => void;
-}): React.JSX.Element {
+};
+
+/**
+ * A component that displays a single event in a timeline with metadata fields.
+ * Shows event information in a key-value format with syntax highlighting for search terms.
+ *
+ * Features:
+ * - Displays event start time and duration
+ * - Shows all event metadata as key-value pairs
+ * - Highlights search terms in both keys and values
+ * - Supports hover and selection states
+ * - Responsive grid layout with proper spacing
+ *
+ * @param params - The component props
+ * @returns A React element displaying the event information
+ */
+function EventViewComponent(params: EventViewComponentProps): React.JSX.Element {
   const { event, filter, formattedTime, isHovered, isSelected, onClick, onHoverStart, onHoverEnd } =
     params;
   const { classes, cx } = useStyles();
@@ -152,4 +193,23 @@ function EventViewComponent(params: {
   );
 }
 
+/**
+ * A memoized event view component that displays timeline events with metadata.
+ * Optimized for performance by preventing unnecessary re-renders when props haven't changed.
+ *
+ * @component
+ * @example
+ * ```tsx
+ * <EventView
+ *   event={timelineEvent}
+ *   filter="search term"
+ *   formattedTime="12:34:56"
+ *   isHovered={false}
+ *   isSelected={true}
+ *   onClick={handleEventClick}
+ *   onHoverStart={handleHoverStart}
+ *   onHoverEnd={handleHoverEnd}
+ * />
+ * ```
+ */
 export const EventView = React.memo(EventViewComponent);

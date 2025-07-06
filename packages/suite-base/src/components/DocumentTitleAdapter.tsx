@@ -12,10 +12,29 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 
+/**
+ * Selector function to extract the player name from the message pipeline context
+ * @param ctx - The message pipeline context
+ * @returns The name of the current player
+ */
 const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
 
 /**
- * DocumentTitleAdapter sets the document title based on the currently selected player
+ * DocumentTitleAdapter component that automatically updates the browser document title
+ * based on the currently selected player name. This provides better user experience
+ * by showing the current data source in the browser tab.
+ *
+ * The title format differs based on the platform:
+ * - On Mac: Shows just the player name
+ * - On other platforms: Shows "Player Name – Lichtblick"
+ *
+ * @component
+ * @returns An empty React fragment (this component has no visual representation)
+ *
+ * @example
+ * ```tsx
+ * <DocumentTitleAdapter />
+ * ```
  */
 export default function DocumentTitleAdapter(): React.JSX.Element {
   const playerName = useMessagePipeline(selectPlayerName);

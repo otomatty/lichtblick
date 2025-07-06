@@ -8,14 +8,37 @@
 import { PropsWithChildren, useCallback } from "react";
 
 /**
- * RemountOnValueChange will unmount and remount the children when _value_ changes.
- * This is used when you want to "reset" the component tree for a specific value change.
+ * Props for the RemountOnValueChange component
+ */
+type RemountOnValueChangeProps = PropsWithChildren<{
+  /** The value to watch for changes. When this value changes, children will be remounted */
+  value: unknown;
+}>;
+
+/**
+ * A utility component that forces remounting of its children when a specific value changes.
+ * This component unmounts and remounts the entire child component tree when the `value` prop changes.
  *
- * Note: Use sparingly and prefer hook dependencies to manage state updates. This should be a
+ * This is useful when you want to completely "reset" a component tree for a specific value change,
+ * effectively clearing all internal state and forcing a fresh initialization.
+ *
+ * **Warning:** Use sparingly and prefer hook dependencies to manage state updates. This should be a
  * last resort nuclear option when you think that an entire subtree should be purged.
+ *
+ * @component
+ * @param props - The component props
+ * @returns A React element that wraps the children
+ *
+ * @example
+ * ```tsx
+ * <RemountOnValueChange value={userId}>
+ *   <UserProfile />
+ * </RemountOnValueChange>
+ * // When userId changes, UserProfile will be completely remounted
+ * ```
  */
 export default function RemountOnValueChange(
-  props: PropsWithChildren<{ value: unknown }>,
+  props: RemountOnValueChangeProps,
 ): React.JSX.Element {
   // When the value changes, useCallback will create a new component by returning a new
   // function instance. Since this is a completely new component it will remount its entire tree.

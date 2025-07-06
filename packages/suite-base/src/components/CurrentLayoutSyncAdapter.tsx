@@ -27,11 +27,38 @@ const log = Logger.getLogger(__filename);
 const EMPTY_UNSAVED_LAYOUTS: Record<LayoutID, UpdatedLayout> = {};
 const SAVE_INTERVAL_MS = 1000;
 
+/**
+ * Selector function to get the current layout from the layout state
+ * @param state - The layout state
+ * @returns The currently selected layout
+ */
 const selectCurrentLayout = (state: LayoutState) => state.selectedLayout;
 
 /**
- * Observes changes in the current layout and asynchronously pushes them to the
- * layout manager.
+ * A synchronization adapter that observes changes in the current layout and
+ * asynchronously pushes them to the layout manager. This component handles
+ * the automatic saving of layout changes with debouncing to prevent excessive
+ * write operations.
+ *
+ * Key features:
+ * - Monitors layout changes and batches unsaved modifications
+ * - Debounces save operations to reduce server load
+ * - Handles errors gracefully with user notifications
+ * - Tracks analytics for layout updates
+ * - Flushes pending changes on component unmount
+ *
+ * The component uses a debounced approach where layout changes are collected
+ * and saved after a delay (SAVE_INTERVAL_MS) to avoid saving on every keystroke
+ * or minor adjustment.
+ *
+ * @component
+ * @returns null - This component has no visual representation
+ *
+ * @example
+ * ```tsx
+ * // Used in the main application layout
+ * <CurrentLayoutSyncAdapter />
+ * ```
  */
 export function CurrentLayoutSyncAdapter(): ReactNull {
   const selectedLayout = useCurrentLayoutSelector(selectCurrentLayout);

@@ -20,15 +20,32 @@ import { makeStyles } from "tss-react/mui";
 import { Immutable } from "@lichtblick/suite";
 import AutoSizingCanvas from "@lichtblick/suite-base/components/AutoSizingCanvas";
 
-export type SparklinePoint = { value: number; timestamp: number };
+/**
+ * Represents a single data point in the sparkline
+ */
+export type SparklinePoint = {
+  /** The numeric value of the data point */
+  value: number;
+  /** The timestamp of the data point */
+  timestamp: number;
+};
 
+/**
+ * Props for the Sparkline component
+ */
 type SparklineProps = {
+  /** Array of data points to display in the sparkline */
   points: Immutable<SparklinePoint[]>;
+  /** Width of the sparkline in pixels */
   width: number;
+  /** Height of the sparkline in pixels */
   height: number;
+  /** Time range for the sparkline in milliseconds */
   timeRange: number;
+  /** Optional maximum value for scaling. If not provided, uses the maximum value from the data */
   maximum?: number;
-  nowStamp?: number; // Mostly for testing.
+  /** Optional current timestamp for positioning. Defaults to current time */
+  nowStamp?: number;
 };
 
 const useStyles = makeStyles()((theme) => ({
@@ -38,6 +55,18 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * Draws the sparkline chart on the canvas
+ *
+ * @param points - Array of data points to draw
+ * @param maximum - Maximum value for scaling
+ * @param timeRange - Time range in milliseconds
+ * @param nowStamp - Current timestamp for positioning
+ * @param context - Canvas 2D rendering context
+ * @param width - Canvas width
+ * @param height - Canvas height
+ * @param color - Line color
+ */
 function draw(
   points: Immutable<SparklinePoint[]>,
   maximum: number,
@@ -66,6 +95,25 @@ function draw(
   context.stroke();
 }
 
+/**
+ * A sparkline chart component that displays a small line chart with data points over time.
+ * Useful for showing trends and patterns in time-series data.
+ *
+ * @component
+ * @example
+ * ```tsx
+ * <Sparkline
+ *   points={[
+ *     { value: 10, timestamp: 1000 },
+ *     { value: 20, timestamp: 2000 },
+ *     { value: 15, timestamp: 3000 }
+ *   ]}
+ *   width={200}
+ *   height={50}
+ *   timeRange={5000}
+ * />
+ * ```
+ */
 export function Sparkline(props: SparklineProps): React.JSX.Element {
   const { classes, theme } = useStyles();
   const drawCallback = useCallback(

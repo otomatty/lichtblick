@@ -26,11 +26,36 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * Props for the TextHighlight component
+ */
 type Props = {
+  /** The target string to display and search within */
   targetStr: string;
+  /** The search text to highlight within the target string */
   searchText?: string;
 };
 
+/**
+ * A component that highlights matching text within a target string using fuzzy search.
+ * Uses the fuzzysort library to find matches and highlights them with bold, primary-colored text.
+ *
+ * If no search text is provided, returns the target string unchanged.
+ * If no match is found, returns the target string unchanged.
+ *
+ * @component
+ * @param props - The component props
+ * @returns A React element with highlighted text or plain text
+ *
+ * @example
+ * ```tsx
+ * <TextHighlight
+ *   targetStr="Hello World"
+ *   searchText="wor"
+ * />
+ * // Renders: "Hello <highlighted>Wor</highlighted>ld"
+ * ```
+ */
 export default function TextHighlight({
   targetStr = "",
   searchText = "",

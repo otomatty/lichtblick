@@ -7,8 +7,22 @@
 
 import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 
-// This is in a simple subcomponent so it doesn't trigger rerenders of an entire expensive
-// component like Workspace while it's listening for time values.
+/**
+ * URLStateSyncAdapter component that synchronizes application state with the URL.
+ * This component is implemented as a simple subcomponent to avoid triggering
+ * re-renders of expensive parent components while it listens for state changes.
+ *
+ * The component has no visual representation and returns null, but provides
+ * important functionality for maintaining URL state synchronization.
+ *
+ * @component
+ * @returns null - This component renders nothing
+ *
+ * @example
+ * ```tsx
+ * <URLStateSyncAdapter />
+ * ```
+ */
 export function URLStateSyncAdapter(): ReactNull {
   useStateToURLSynchronization();
 

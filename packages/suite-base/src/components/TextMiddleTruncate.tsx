@@ -43,13 +43,36 @@ const useStyles = makeStyles()(() => ({
   },
 }));
 
+/**
+ * Props for the TextMiddleTruncate component
+ */
 type Props = {
+  /** The text to display with middle truncation */
   text: string;
+  /** Number of characters to show at the end. Defaults to 16 */
   endTextLength?: number;
+  /** Optional CSS class name for styling */
   className?: string;
+  /** Optional inline styles */
   style?: CSSProperties;
 };
 
+/**
+ * A component that displays text with middle truncation, showing the beginning and end
+ * of the text with ellipsis in the middle when space is limited.
+ *
+ * The component intelligently splits the text to avoid breaking at whitespace
+ * and provides proper clipboard copy functionality for the full text.
+ *
+ * @component
+ * @example
+ * ```tsx
+ * <TextMiddleTruncate
+ *   text="This is a very long text that needs to be truncated"
+ *   endTextLength={20}
+ * />
+ * ```
+ */
 export default function TextMiddleTruncate({
   text,
   endTextLength,
@@ -69,8 +92,10 @@ export default function TextMiddleTruncate({
   const startText = text.substring(0, startTextLen);
   const endText = text.substring(startTextLen);
 
-  // Copy the full text to the clipboard manually. Otherwise the browser will insert a
-  // newline into the copied text since it spans two DOM nodes.
+  /**
+   * Handles copying the full text to clipboard, preventing the default behavior
+   * that would copy text with newlines due to the split DOM structure.
+   */
   const onCopy = useCallback(
     (event: ClipboardEvent) => {
       event.preventDefault();

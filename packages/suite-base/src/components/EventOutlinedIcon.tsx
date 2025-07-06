@@ -7,6 +7,19 @@
 
 import { SvgIcon, SvgIconProps } from "@mui/material";
 
+/**
+ * An outlined event icon component that displays a marker or event indicator with outline style.
+ * Uses Material-UI's SvgIcon as the base component.
+ *
+ * @component
+ * @param props - Standard SvgIcon props for styling and behavior
+ * @returns A React element representing the outlined event icon
+ *
+ * @example
+ * ```tsx
+ * <EventOutlinedIcon fontSize="large" color="primary" />
+ * ```
+ */
 export default function EventOutlinedIcon(props: SvgIconProps): React.JSX.Element {
   return (
     <SvgIcon {...props}>

@@ -22,20 +22,45 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { useCallback, useState, PropsWithChildren, useMemo } from "react";
+import { useCallback, useState, PropsWithChildren, useMemo, ReactElement } from "react";
 
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
-function CopyButtonComponent(
-  props: PropsWithChildren<{
-    getText: () => string;
-    size?: "small" | "medium" | "large";
-    iconSize?: "small" | "medium" | "large";
-    color?: ButtonProps["color"];
-    className?: string;
-    edge?: IconButtonProps["edge"];
-  }>,
-): React.JSX.Element {
+/**
+ * Props for the CopyButton component
+ */
+type CopyButtonProps = PropsWithChildren<{
+  /** Function that returns the text to copy to clipboard */
+  getText: () => string;
+  /** Size of the button */
+  size?: "small" | "medium" | "large";
+  /** Size of the icon */
+  iconSize?: "small" | "medium" | "large";
+  /** Color theme for the button */
+  color?: ButtonProps["color"];
+  /** CSS class name for styling */
+  className?: string;
+  /** Edge positioning for IconButton */
+  edge?: IconButtonProps["edge"];
+}>;
+
+/**
+ * A button component that copies text to the clipboard with visual feedback.
+ * Can be rendered as either an icon button or a text button with children.
+ *
+ * @component
+ * @example
+ * ```tsx
+ * // As an icon button
+ * <CopyButton getText={() => "Hello World"} />
+ *
+ * // As a text button
+ * <CopyButton getText={() => "Hello World"}>
+ *   Copy Text
+ * </CopyButton>
+ * ```
+ */
+function CopyButtonComponent(props: CopyButtonProps): ReactElement {
   const {
     children,
     className,
@@ -48,6 +73,9 @@ function CopyButtonComponent(
   const theme = useTheme();
   const [copied, setCopied] = useState(false);
 
+  /**
+   * Memoized check icon based on icon size
+   */
   const checkIcon = useMemo(() => {
     switch (iconSize) {
       case "small":
@@ -59,6 +87,9 @@ function CopyButtonComponent(
     }
   }, [iconSize, theme.palette.success.main]);
 
+  /**
+   * Memoized copy icon based on icon size
+   */
   const copyIcon = useMemo(() => {
     switch (iconSize) {
       case "small":
@@ -70,6 +101,9 @@ function CopyButtonComponent(
     }
   }, [iconSize]);
 
+  /**
+   * Handles the copy action to clipboard with visual feedback
+   */
   const handleCopy = useCallback(() => {
     clipboard
       .copy(getText())

@@ -7,6 +7,19 @@
 
 import { SvgIcon, SvgIconProps } from "@mui/material";
 
+/**
+ * A filled event icon component that displays a marker or event indicator.
+ * Uses Material-UI's SvgIcon as the base component.
+ *
+ * @component
+ * @param props - Standard SvgIcon props for styling and behavior
+ * @returns A React element representing the event icon
+ *
+ * @example
+ * ```tsx
+ * <EventIcon fontSize="large" color="primary" />
+ * ```
+ */
 export default function EventIcon(props: SvgIconProps): React.JSX.Element {
   return (
     <SvgIcon {...props}>
