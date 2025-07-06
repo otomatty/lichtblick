@@ -66,10 +66,28 @@ import { useSharedPanelState } from "./useSharedPanelState";
 
 const log = Logger.getLogger(__filename);
 
+/**
+ * バージョン管理されたパネル設定の型定義
+ *
+ * @description パネルの設定にバージョン情報を含む構造体
+ * @internal
+ */
 type VersionedPanelConfig = Record<string, unknown> & { [VERSION_CONFIG_KEY]: number };
 
+/**
+ * パネル設定のバージョン管理キー
+ *
+ * @description パネル設定内でバージョン番号を識別するためのキー
+ * @constant
+ */
 export const VERSION_CONFIG_KEY = "foxgloveConfigVersion";
 
+/**
+ * 設定がバージョン管理されているかどうかを判定するタイプガード
+ *
+ * @param config - 判定対象の設定オブジェクト
+ * @returns 設定がバージョン管理されている場合true
+ */
 function isVersionedPanelConfig(config: unknown): config is VersionedPanelConfig {
   return (
     config != undefined &&
@@ -79,19 +97,35 @@ function isVersionedPanelConfig(config: unknown): config is VersionedPanelConfig
   );
 }
 
+/**
+ * PanelExtensionAdapterコンポーネントのProps
+ *
+ * @description パネル拡張機能を初期化し、レンダリングするためのプロパティ
+ */
 type PanelExtensionAdapterProps = {
-  /** function that initializes the panel extension */
+  /**
+   * パネル拡張機能を初期化する関数
+   *
+   * @description ExtensionPanelRegistrationのinitPanelメソッド、
+   * またはBuiltinPanelExtensionContextを受け取る初期化関数
+   */
   initPanel:
     | ExtensionPanelRegistration["initPanel"]
     | ((context: BuiltinPanelExtensionContext) => void);
+
   /**
-   * If defined, the highest supported version of config the panel supports.
-   * Used to prevent older implementations of a panel from trying to access
-   * newer, incompatible versions of the panel's config. Panels should include a
-   * numbered foxgloveConfigVersion property in their config to control this.
+   * パネルがサポートする設定の最高バージョン
+   *
+   * @description 定義されている場合、古いパネル実装が新しい非互換な設定バージョンに
+   * アクセスしようとするのを防ぐ。パネルはこれを制御するために
+   * 設定内にfoxgloveConfigVersionプロパティを含める必要がある
    */
   highestSupportedConfigVersion?: number;
+
+  /** パネルの設定オブジェクト */
   config: unknown;
+
+  /** 設定を保存するためのコールバック関数 */
   saveConfig: SaveConfig<unknown>;
 };
 
@@ -103,11 +137,44 @@ function selectInstalledMessageConverters(state: ExtensionCatalog) {
   return state.installedMessageConverters;
 }
 
-type RenderFn = NonNullable<PanelExtensionContext["onRender"]>;
 /**
- * PanelExtensionAdapter renders a panel extension via initPanel
+ * レンダリング関数の型定義
  *
- * The adapter creates a PanelExtensionContext and invokes initPanel using the context.
+ * @description パネルのレンダリング処理を行う関数の型
+ */
+type RenderFn = NonNullable<PanelExtensionContext["onRender"]>;
+
+/**
+ * パネル拡張機能のアダプターコンポーネント
+ *
+ * @description このコンポーネントはパネル拡張機能をinitPanel関数を通じてレンダリングします。
+ * アダプターはPanelExtensionContextを作成し、そのコンテキストを使用してinitPanelを呼び出します。
+ *
+ * ### 主要な機能
+ * - パネル拡張機能の初期化とライフサイクル管理
+ * - メッセージパイプラインとの連携
+ * - レンダリング状態の管理
+ * - 設定のバージョン管理
+ * - パフォーマンス監視（低速レンダリング検出）
+ * - ドラッグアンドドロップサポート
+ *
+ * ### 使用方法
+ * ```tsx
+ * <PanelExtensionAdapter
+ *   initPanel={myInitPanelFunction}
+ *   config={panelConfig}
+ *   saveConfig={handleSaveConfig}
+ *   highestSupportedConfigVersion={2}
+ * />
+ * ```
+ *
+ * ### 注意点
+ * - initPanel関数は一度だけ呼び出されます
+ * - 設定の変更はsaveConfigコールバックを通じて行う必要があります
+ * - パネルは独自のレンダリング管理を行う必要があります
+ *
+ * @param props - コンポーネントのプロパティ
+ * @returns レンダリングされたパネル拡張機能
  */
 function PanelExtensionAdapter(
   props: React.PropsWithChildren<PanelExtensionAdapterProps>,

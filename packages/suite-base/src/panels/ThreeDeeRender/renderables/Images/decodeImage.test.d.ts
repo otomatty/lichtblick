@@ -1,2 +1,0 @@
-/** @jest-environment jsdom */
-export {};

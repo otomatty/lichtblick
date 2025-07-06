@@ -40,38 +40,183 @@ import {
   TopicSchemaConversions,
 } from "./messageProcessing";
 
+/**
+ * 空のパラメーターマップ
+ *
+ * @description パラメーターが利用できない場合のデフォルト値として使用される空のマップ。
+ *
+ * @constant
+ */
 const EmptyParameters = new Map<string, ParameterValue>();
 
+/**
+ * レンダリング状態設定
+ *
+ * @description パネルのレンダリング状態を構築するために必要な設定情報。
+ * 現在はトピック固有の設定のみを含んでいますが、
+ * 将来的には他の設定項目も追加される可能性があります。
+ */
 export type RenderStateConfig = {
+  /**
+   * トピック設定
+   *
+   * @description 各トピックに対する設定情報のマップ。
+   * キーはトピック名、値は任意の設定オブジェクトです。
+   */
   topics: Record<string, unknown>;
 };
 
+/**
+ * レンダリング状態ビルダーの入力パラメーター
+ *
+ * @description buildRenderState関数が受け取るすべての入力パラメーターを定義します。
+ * これらのパラメーターはレンダリング状態を構築するために必要な情報を含んでいます。
+ */
 export type BuilderRenderStateInput = Immutable<{
+  /**
+   * アプリケーション設定
+   *
+   * @description ユーザーが設定したアプリケーション全体の設定値。
+   * undefinedの場合、設定が利用できないことを示します。
+   */
   appSettings: Map<string, AppSettingValue> | undefined;
+
+  /**
+   * カラースキーム
+   *
+   * @description 現在のテーマ（ライト/ダーク）。
+   * undefinedの場合、デフォルトのカラースキームが使用されます。
+   */
   colorScheme: RenderState["colorScheme"] | undefined;
+
+  /**
+   * 現在のフレームメッセージ
+   *
+   * @description 現在のフレームで受信したメッセージイベントの配列。
+   * undefinedの場合、新しいメッセージがないことを示します。
+   */
   currentFrame: MessageEvent[] | undefined;
+
+  /**
+   * グローバル変数
+   *
+   * @description システム全体で利用可能な変数の値。
+   * パネル間で共有される状態情報を含みます。
+   */
   globalVariables: GlobalVariables;
+
+  /**
+   * ホバー値
+   *
+   * @description ユーザーがタイムラインなどでホバーしている時刻の情報。
+   * undefinedの場合、ホバー操作が行われていないことを示します。
+   */
   hoverValue: HoverValue | undefined;
+
+  /**
+   * メッセージコンバーター
+   *
+   * @description メッセージを別のスキーマに変換するためのコンバーター群。
+   * 省略可能で、変換が不要な場合は提供されません。
+   */
   messageConverters?: readonly RegisterMessageConverterArgs<unknown>[];
+
+  /**
+   * プレイヤー状態
+   *
+   * @description 現在のプレイヤー（データソース）の状態。
+   * undefinedの場合、プレイヤーが利用できないことを示します。
+   */
   playerState: PlayerState | undefined;
+
+  /**
+   * 共有パネル状態
+   *
+   * @description 同じタイプのパネル間で共有される状態情報。
+   * undefinedの場合、共有状態が利用できないことを示します。
+   */
   sharedPanelState: Record<string, unknown> | undefined;
+
+  /**
+   * ソート済みトピック一覧
+   *
+   * @description 利用可能なトピックのソート済みリスト。
+   * メッセージ変換やフィルタリングに使用されます。
+   */
   sortedTopics: readonly PlayerTopic[];
+
+  /**
+   * 購読情報
+   *
+   * @description パネルが購読しているトピックとその設定の配列。
+   */
   subscriptions: Subscription[];
+
+  /**
+   * 監視対象フィールド
+   *
+   * @description パネルが監視しているRenderStateのフィールド名のセット。
+   * パフォーマンス最適化のため、変更が必要なフィールドのみが処理されます。
+   */
   watchedFields: Set<string>;
+
+  /**
+   * 設定オブジェクト
+   *
+   * @description パネル固有の設定情報。
+   * undefinedの場合、設定が利用できないことを示します。
+   */
   config?: RenderStateConfig | undefined;
 }>;
 
+/**
+ * レンダリング状態構築関数の型定義
+ *
+ * @description 入力パラメーターから新しいRenderStateを構築する関数の型。
+ *
+ * @param input - レンダリング状態構築に必要な入力パラメーター
+ * @returns 新しいRenderState、または更新が不要な場合はundefined
+ */
 type BuildRenderStateFn = (input: BuilderRenderStateInput) => Immutable<RenderState> | undefined;
 
 /**
- * initRenderStateBuilder creates a function that transforms render state input into a new
- * RenderState
+ * レンダリング状態ビルダーを初期化
  *
- * This function tracks previous input to determine what parts of the existing render state to
- * update or whether there are any updates
+ * @description レンダリング状態の入力を新しいRenderStateに変換する関数を作成します。
+ * この関数は以前の入力を追跡し、既存のレンダリング状態のどの部分を更新するか、
+ * または更新があるかどうかを決定します。
  *
- * @returns a function that accepts render state input and returns a new RenderState to render or
- * undefined if there's no update for rendering
+ * ### 主要な機能
+ * - **差分検出**: 前回の状態と比較して変更されたフィールドのみを更新
+ * - **メモ化**: パフォーマンス向上のため、重い計算結果をキャッシュ
+ * - **最適化**: 不要な更新を防ぎ、レンダリングパフォーマンスを向上
+ *
+ * ### 処理の流れ
+ * 1. 入力パラメーターを前回の値と比較
+ * 2. 変更されたフィールドのみを更新
+ * 3. メッセージ変換処理を実行
+ * 4. 新しいRenderStateを返すか、変更がない場合はundefinedを返す
+ *
+ * @returns レンダリング状態構築関数
+ *
+ * @example
+ * ```typescript
+ * const buildRenderState = initRenderStateBuilder();
+ *
+ * // 入力パラメーターを使用してレンダリング状態を構築
+ * const renderState = buildRenderState({
+ *   appSettings: new Map([["theme", "dark"]]),
+ *   colorScheme: "dark",
+ *   currentFrame: messages,
+ *   globalVariables: { robotName: "robot1" },
+ *   // ... その他のパラメーター
+ * });
+ *
+ * if (renderState) {
+ *   // レンダリング状態が更新された場合の処理
+ *   panel.render(renderState);
+ * }
+ * ```
  */
 function initRenderStateBuilder(): BuildRenderStateFn {
   let prevVariables: Immutable<GlobalVariables> = EMPTY_GLOBAL_VARIABLES;
@@ -91,6 +236,17 @@ function initRenderStateBuilder(): BuildRenderStateFn {
 
   const prevRenderState: Writable<Immutable<RenderState>> = {};
 
+  /**
+   * レンダリング状態のフィールドを更新
+   *
+   * @description 指定されたフィールドの値が変更されている場合、
+   * レンダリング状態を更新し、shouldRenderフラグを設定します。
+   *
+   * @param field - 更新するRenderStateのフィールド名
+   * @param newValue - 新しい値
+   * @param prevValue - 前回の値
+   * @param shouldRender - レンダリングが必要かどうかを示すオブジェクト
+   */
   function updateRenderStateField<T>(
     field: keyof RenderState,
     newValue: T,
@@ -103,6 +259,15 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     }
   }
 
+  /**
+   * レンダリング状態構築関数
+   *
+   * @description 入力パラメーターから新しいRenderStateを構築します。
+   * 変更されたフィールドのみを更新し、パフォーマンスを最適化します。
+   *
+   * @param input - 構築に必要な入力パラメーター
+   * @returns 新しいRenderState、または更新が不要な場合はundefined
+   */
   return function buildRenderState(input: BuilderRenderStateInput) {
     const {
       appSettings,

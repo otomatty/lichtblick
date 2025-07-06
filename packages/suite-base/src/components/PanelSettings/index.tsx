@@ -37,23 +37,73 @@ import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/globalConstants";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
+/**
+ * レイアウト状態から単一パネルIDを取得するセレクター
+ *
+ * @description レイアウトが文字列の場合（単一パネル）、そのIDを返す。
+ * 複数パネルの場合は undefined を返す。
+ *
+ * @param state - レイアウト状態
+ * @returns 単一パネルのID、または undefined
+ */
 const singlePanelIdSelector = (state: LayoutState) =>
   typeof state.selectedLayout?.data?.layout === "string"
     ? state.selectedLayout.data.layout
     : undefined;
 
+/**
+ * パネル状態ストアからシーケンス番号増加関数を取得するセレクター
+ *
+ * @param store - パネル状態ストア
+ * @returns シーケンス番号増加関数
+ */
 const selectIncrementSequenceNumber = (store: PanelStateStore) => store.incrementSequenceNumber;
 
+/**
+ * 空の設定ツリーの定数
+ *
+ * @description 設定が存在しない場合に使用するフォールバック設定ツリー
+ */
 const EMPTY_SETTINGS_TREE: SettingsTree = Object.freeze({
   actionHandler: () => undefined,
   nodes: {},
 });
 
+/**
+ * PanelSettingsコンポーネントのプロパティ
+ *
+ * @interface PanelSettingsProps
+ */
 type PanelSettingsProps = React.PropsWithChildren<{
+  /** ツールバーを無効化するかどうか */
   disableToolbar?: boolean;
+  /** テスト用の選択されたパネルID（テスト時のみ使用） */
   selectedPanelIdsForTests?: readonly string[];
 }>;
 
+/**
+ * パネル設定管理のメインコンポーネント
+ *
+ * @description 選択されたパネルの設定を管理・表示する中核コンポーネント。
+ * 以下の機能を提供する：
+ * - パネル設定の動的構築と表示
+ * - 設定のインポート/エクスポート機能
+ * - 設定のデフォルト値へのリセット機能
+ * - 新旧TopNavUIの切り替え対応
+ * - 単一パネルの自動選択
+ * - 設定変更時のリアルタイム反映
+ *
+ * @param props - PanelSettingsのプロパティ
+ * @param props.disableToolbar - ツールバーを無効化するかどうか
+ * @param props.selectedPanelIdsForTests - テスト用の選択されたパネルID
+ *
+ * @returns パネル設定管理コンポーネント
+ *
+ * @example
+ * ```typescript
+ * <PanelSettings disableToolbar={false} />
+ * ```
+ */
 export default function PanelSettings({
   disableToolbar = false,
   selectedPanelIdsForTests,
@@ -69,19 +119,35 @@ export default function PanelSettings({
 
   const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
 
-  // If no panel is selected and there is only one panel in the layout, select it
+  /**
+   * 単一パネルの自動選択効果
+   *
+   * @description パネルが選択されておらず、レイアウトに単一パネルのみが
+   * 存在する場合、自動的にそのパネルを選択する。
+   */
   useEffect(() => {
     if (selectedPanelIds.length === 0 && singlePanelId != undefined) {
       selectAllPanels();
     }
   }, [selectAllPanels, selectedPanelIds, singlePanelId]);
 
+  /**
+   * 選択されたパネルのIDを取得
+   *
+   * @description 選択されたパネルが1つだけの場合、そのIDを返す。
+   * 複数選択または未選択の場合は undefined を返す。
+   */
   const selectedPanelId = useMemo(
     () => (selectedPanelIds.length === 1 ? selectedPanelIds[0] : undefined),
     [selectedPanelIds],
   );
 
-  // Automatically deselect the panel we were editing when the settings sidebar closes
+  /**
+   * 設定サイドバーが閉じられた時の自動選択解除
+   *
+   * @description コンポーネントがアンマウントされる際に、
+   * 選択されたパネルがあれば自動的に選択を解除する。
+   */
   useUnmount(() => {
     if (selectedPanelId != undefined) {
       setSelectedPanelIds([]);
@@ -90,10 +156,18 @@ export default function PanelSettings({
 
   const panelCatalog = usePanelCatalog();
   const { getCurrentLayoutState: getCurrentLayout, savePanelConfigs } = useCurrentLayoutActions();
+
+  /**
+   * 選択されたパネルのタイプを取得
+   */
   const panelType = useMemo(
     () => (selectedPanelId != undefined ? getPanelTypeFromId(selectedPanelId) : undefined),
     [selectedPanelId],
   );
+
+  /**
+   * パネルカタログからパネル情報を取得
+   */
   const panelInfo = useMemo(
     () => (panelType != undefined ? panelCatalog.getPanelByType(panelType) : undefined),
     [panelCatalog, panelType],
@@ -102,6 +176,13 @@ export default function PanelSettings({
   const incrementSequenceNumber = usePanelStateStore(selectIncrementSequenceNumber);
 
   const [showShareModal, setShowShareModal] = useState(false);
+
+  /**
+   * 設定共有モーダルのメモ化
+   *
+   * @description 設定の共有（JSON形式でのインポート/エクスポート）を
+   * 行うモーダルダイアログを管理する。
+   */
   const shareModal = useMemo(() => {
     const panelConfigById = getCurrentLayout().selectedLayout?.data?.configById;
     if (selectedPanelId == undefined || !showShareModal || !panelConfigById) {
@@ -135,6 +216,13 @@ export default function PanelSettings({
   const messagePipelineState = useMessagePipelineGetter();
 
   const storedSettingsTrees = usePanelStateStore(({ settingsTrees }) => settingsTrees);
+
+  /**
+   * 設定ツリーの構築
+   *
+   * @description パネルの基本設定と拡張設定を統合した
+   * 設定ツリーを動的に構築する。
+   */
   const settingsTree = useMemo(
     () =>
       buildSettingsTree({
@@ -161,6 +249,12 @@ export default function PanelSettings({
     ],
   );
 
+  /**
+   * 設定をデフォルト値にリセットするコールバック
+   *
+   * @description 選択されたパネルの設定を空のオブジェクトに設定し、
+   * デフォルト値を適用する。
+   */
   const resetToDefaults = useCallback(() => {
     if (selectedPanelId) {
       savePanelConfigs({
@@ -170,10 +264,12 @@ export default function PanelSettings({
     }
   }, [incrementSequenceNumber, savePanelConfigs, selectedPanelId]);
 
+  // パネルが選択されていない場合の空状態表示
   if (selectedPanelId == undefined) {
     return <EmptyWrapper enableNewTopNav>{t("selectAPanelToEditItsSettings")}</EmptyWrapper>;
   }
 
+  // 設定がまだロードされていない場合の表示
   if (!config) {
     return <EmptyWrapper enableNewTopNav>{t("loadingPanelSettings")}</EmptyWrapper>;
   }
