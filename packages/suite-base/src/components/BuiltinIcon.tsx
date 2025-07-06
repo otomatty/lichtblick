@@ -8,10 +8,27 @@
 import ICONS from "@lichtblick/suite-base/theme/icons";
 import { RegisteredIconNames } from "@lichtblick/suite-base/types/Icons";
 
+/**
+ * Props for the BuiltinIcon component
+ */
 type BuiltinIconProps = {
+  /** The name of the registered icon to display */
   name?: RegisteredIconNames;
 };
 
+/**
+ * A component that renders a built-in icon by name from the registered icons collection.
+ * If no name is provided or the name is undefined, renders an empty fragment.
+ *
+ * @component
+ * @param props - The component props
+ * @returns A React element representing the requested icon or empty fragment
+ *
+ * @example
+ * ```tsx
+ * <BuiltinIcon name="add" />
+ * ```
+ */
 export function BuiltinIcon(props: BuiltinIconProps): React.JSX.Element {
   if (props.name == undefined) {
     return <></>;

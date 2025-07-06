@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Typography } from "@mui/material";
-import { ReactNode } from "react";
+import { ReactNode, ReactElement } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -23,13 +23,32 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * Props for the EmptyState component
+ */
+type EmptyStateProps = {
+  /** Content to display in the empty state */
+  children: ReactNode;
+  /** Optional CSS class name for styling */
+  className?: string;
+};
+
+/**
+ * A component that displays an empty state message centered on the screen.
+ * Used to show messages when there's no data or content to display.
+ *
+ * @component
+ * @example
+ * ```tsx
+ * <EmptyState>
+ *   No data available
+ * </EmptyState>
+ * ```
+ */
 export default function EmptyState({
   children,
   className,
-}: {
-  children: ReactNode;
-  className?: string;
-}): React.JSX.Element {
+}: EmptyStateProps): ReactElement {
   const { classes, cx } = useStyles();
 
   return (

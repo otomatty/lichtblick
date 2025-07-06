@@ -28,6 +28,49 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/**
+ * Props for the SidebarContent component
+ */
+type SidebarContentProps = {
+  /** The title to display in the sidebar header */
+  title?: string;
+  /** Whether to disable padding around the content area */
+  disablePadding?: boolean;
+  /** Whether to disable the toolbar completely */
+  disableToolbar?: boolean;
+  /** Buttons/items to display on the leading (left) side of the header */
+  leadingItems?: React.ReactNode[];
+  /** Overflow style of root element @default "auto" */
+  overflow?: CSSProperties["overflow"];
+  /** Buttons/items to display on the trailing (right) side of the header */
+  trailingItems?: React.ReactNode[];
+};
+
+/**
+ * A standardized sidebar content container with optional header toolbar.
+ * Provides consistent layout and styling for sidebar panels throughout the application.
+ *
+ * The component includes:
+ * - Optional header toolbar with title and action buttons
+ * - Flexible content area with configurable padding
+ * - Support for leading (left) and trailing (right) header items
+ * - Configurable overflow behavior
+ *
+ * @component
+ * @param props - The component props
+ * @returns A React element representing the sidebar content container
+ *
+ * @example
+ * ```tsx
+ * <SidebarContent
+ *   title="My Panel"
+ *   leadingItems={[<BackButton />]}
+ *   trailingItems={[<SettingsButton />]}
+ * >
+ *   <div>Panel content goes here</div>
+ * </SidebarContent>
+ * ```
+ */
 export function SidebarContent({
   disablePadding = false,
   disableToolbar = false,
@@ -68,20 +111,3 @@ export function SidebarContent({
     </Stack>
   );
 }
-
-type SidebarContentProps = {
-  title?: string;
-  disablePadding?: boolean;
-  disableToolbar?: boolean;
-
-  /** Buttons/items to display on the leading (left) side of the header */
-  leadingItems?: React.ReactNode[];
-
-  /** Overflow style of root element
-   * @default: "auto"
-   */
-  overflow?: CSSProperties["overflow"];
-
-  /** Buttons/items to display on the trailing (right) side of the header */
-  trailingItems?: React.ReactNode[];
-};
