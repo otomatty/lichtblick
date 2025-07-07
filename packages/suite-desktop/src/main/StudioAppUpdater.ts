@@ -53,9 +53,23 @@ class StudioAppUpdater extends EventEmitter<EventTypes> {
    * Start the update process.
    */
   public start(): void {
-    // 自動更新を完全に無効にする
-    log.info("Automatic updates disabled (forked project)");
-    return;
+    // 環境変数による自動更新制御
+    const autoUpdateEnabled = process.env.AUTO_UPDATE_ENABLED === "true";
+
+    if (!autoUpdateEnabled) {
+      log.info("Automatic updates disabled via environment variable (AUTO_UPDATE_ENABLED=false)");
+      return;
+    }
+
+    // 更新サーバーの設定確認
+    const updateServerUrl = process.env.UPDATE_SERVER_URL;
+    const updateServerToken = process.env.UPDATE_SERVER_TOKEN;
+
+    if (updateServerUrl && updateServerToken) {
+      // HTTPサーバー使用時の認証ヘッダー設定
+      log.info(`Configuring update server: ${updateServerUrl}`);
+      autoUpdater.addAuthHeader(`Bearer ${updateServerToken}`);
+    }
 
     if (this.#started) {
       log.info(`StudioAppUpdater already running`);
@@ -63,7 +77,7 @@ class StudioAppUpdater extends EventEmitter<EventTypes> {
     }
     this.#started = true;
 
-    log.info(`Starting update loop`);
+    log.info(`Starting update loop with environment-based control`);
     setTimeout(() => {
       void this.#maybeCheckForUpdates();
     }, this.#initialUpdateDelaySec * 1000);
