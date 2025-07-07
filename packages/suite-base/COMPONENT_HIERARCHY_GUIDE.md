@@ -1,5 +1,61 @@
 # suite-base コンポーネント階層構造ガイド
 
+## 📚 新規メンバー向け読み方ガイド
+
+### 🎯 このドキュメントの目的
+このドキュメントは、`@lichtblick/suite-base`パッケージの共通コンポーネント階層構造について説明します。新規参加メンバーが効率的にコードベースを理解できるように、上位コンポーネントから下位コンポーネントまでの階層関係を明確にします。
+
+### 📋 推奨読み方の順序
+
+#### Phase 1: 全体構造理解（必須）
+1. **このドキュメント全体を読む** - プロジェクト全体の階層構造を把握
+2. **`packages/suite-base/README.md`** - パッケージの概要と目的を理解
+3. **`packages/suite-base/src/ARCHITECTURE_GUIDE.md`** - アーキテクチャの詳細理解
+
+#### Phase 2: 実装詳細理解（必須）
+1. **`packages/suite-base/COMPONENTS_ARCHITECTURE_GUIDE.md`** - componentsディレクトリの詳細構造
+2. **`packages/suite-base/src/components/README.md`** - コンポーネントの実装状況と進捗
+
+#### Phase 3: 実践的な開発準備（推奨）
+1. **`packages/suite-base/DEVELOPMENT_SETUP_GUIDE.md`** - 開発環境セットアップ
+2. **`packages/suite-base/CODING_STANDARDS.md`** - コーディング規約
+3. **`packages/suite-base/TESTING_AND_DEBUG_GUIDE.md`** - テスト・デバッグのベストプラクティス
+
+#### Phase 4: 高度な開発（任意）
+1. **`packages/suite-base/PANEL_DEVELOPMENT_TUTORIAL.md`** - 新規パネル作成チュートリアル
+2. **`packages/suite-base/PERFORMANCE_OPTIMIZATION_GUIDE.md`** - パフォーマンス最適化
+3. **`packages/suite-base/STORYBOOK_GUIDE.md`** - Storybook活用法
+
+### 🚀 学習の進め方
+
+#### 初日〜3日目: 基礎理解
+- Phase 1の資料を読み、全体像を把握
+- 実際にコードを読みながら理解を深める
+- 疑問点をメモしておく
+
+#### 1週間目: 実装理解
+- Phase 2の資料を読み、コンポーネントの詳細を理解
+- 簡単なコンポーネントから実際のコードを読む
+- 既存のStorybookを確認して動作を把握
+
+#### 2週間目: 実践準備
+- Phase 3の資料を読み、開発環境をセットアップ
+- テスト手法を理解し、実際にテストを実行
+- 小さな修正やバグ修正から始める
+
+#### 3週間目以降: 高度な開発
+- Phase 4の資料を参考に、新機能の開発に取り組む
+- パフォーマンス最適化やベストプラクティスを実践
+
+### 💡 効率的な学習のコツ
+
+1. **実際にコードを動かす**: 読むだけでなく、実際に動かして理解を深める
+2. **Storybookを活用**: 各コンポーネントの動作をStorybookで確認
+3. **小さな変更から始める**: 大きな機能追加の前に、小さな修正で慣れる
+4. **質問を躊躇しない**: 分からないことは積極的に質問する
+
+---
+
 ## 概要
 
 このドキュメントは、`@lichtblick/suite-base`パッケージの共通コンポーネント階層構造について説明します。新規参加メンバーが効率的にコードベースを理解できるように、上位コンポーネントから下位コンポーネントまでの階層関係を明確にします。
