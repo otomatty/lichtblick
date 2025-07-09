@@ -101,6 +101,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   const { classes, cx } = useStyles();
   const [menuAnchorEl, setMenuAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const [subMenuAnchorEl, setSubmenuAnchorEl] = useState<undefined | HTMLElement>(undefined);
+  const isTouchInteraction = useRef(false);
   const { t } = useTranslation("panelToolbar");
 
   const menuOpen = Boolean(menuAnchorEl);
@@ -119,6 +120,9 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     () => getPanelTypeFromMosaic(mosaicWindowActions, mosaicActions),
     [mosaicActions, mosaicWindowActions],
   );
+  const handleTouchStart = useCallback(() => {
+    isTouchInteraction.current = true;
+  }, []);
 
   /**
    * メニューボタンクリック処理
@@ -146,7 +150,9 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     if (subMenuAnchorEl !== event.currentTarget) {
       setSubmenuAnchorEl(event.currentTarget);
     }
-    setMenuAnchorEl(undefined);
+    if (!isTouchInteraction.current) {
+      setMenuAnchorEl(undefined);
+    }
   };
 
   /**
@@ -295,6 +301,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
         anchorEl={menuAnchorEl}
         open={menuOpen}
         onClose={handleMenuClose}
+        onTouchStart={handleTouchStart}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         MenuListProps={{
           "aria-labelledby": "panel-menu-button",
