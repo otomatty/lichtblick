@@ -192,7 +192,7 @@ Lichtblick Studioのデスクトップ版とWEB版で共通化されているコ
 - **`UlogLocalDataSourceFactory`** - ULogファイル
 - **`VelodyneDataSourceFactory`** - Velodyneデータ
 - **`RemoteDataSourceFactory`** - リモートデータソース
-- **`SampleNuscenesDataSourceFactory`** - nuScenesサンプル
+- **`SampleNuScenesDataSourceFactory`** - nuScenesサンプル
 
 ---
 
