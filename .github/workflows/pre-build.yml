@@ -1,63 +1,77 @@
+# リリース前のビルド準備ワークフロー
+# バージョン更新後の事前ビルドとアーティファクト作成を実行
 name: Pre-Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手動またはbump-versionワークフローから呼び出し
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-latest # 全プラットフォーム対応のためmacOS環境を使用
 
     steps:
+      # リポジトリのチェックアウト（書き込み権限付きトークン使用）
       - name: Checkout Repository
         uses: actions/checkout@v4.1.1
         with:
           token: ${{ secrets.LICHTBLICK_GITHUB_TOKEN }}
 
+      # Node.js 16.17 環境をセットアップ
       - name: Set up Node.js
         uses: actions/setup-node@v4.0.3
         with:
           node-version: 16.17
 
+      # Yarn パッケージマネージャーを有効化
       - name: Enable corepack
         run: corepack enable yarn
 
+      # 依存関係をインストール（厳密なロック）
       - name: Install dependencies
         run: yarn install --immutable
 
+      # package.jsonからバージョン情報を読み取り
       - name: Read version from package.json
         id: package_version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
 
+      # デスクトップ版プロダクションビルド
       - name: Build prod files
         run: |
           yarn run desktop:build:prod
 
+      # Windows版実行ファイルのビルド
       - name: Build Windows version
         run: yarn run package:win
 
+      # Linux版パッケージのビルド
       - name: Build Linux version
         run: yarn run package:linux
 
+      # macOS版DMGファイルのビルド
       - name: Build macOS version
         run: yarn run package:darwin
 
+      # Windows実行ファイルのアーティファクト保存
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: lichtblick-${{ env.version }}-windows
           path: dist/lichtblick-${{ env.version }}-win.exe
-          retention-days: 30
+          retention-days: 30 # 30日間保持
 
+      # Linux DEBパッケージのアーティファクト保存
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: lichtblick-${{ env.version }}-debian-amd64
           path: dist/lichtblick-${{ env.version }}-linux-amd64.deb
-          retention-days: 30
+          retention-days: 30 # 30日間保持
 
+      # macOS DMGファイルのアーティファクト保存
       - name: Upload MacOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: lichtblick-${{ env.version }}-macos
           path: dist/lichtblick-${{ env.version }}-mac-universal.dmg
-          retention-days: 30
+          retention-days: 30 # 30日間保持

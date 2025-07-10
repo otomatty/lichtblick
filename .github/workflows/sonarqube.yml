@@ -1,29 +1,35 @@
+# SonarCloud を使用したコード品質分析ワークフロー
+# コードの品質、セキュリティ、テストカバレッジを継続的に監視
 name: SonarCloud
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main"] # mainブランチへのプッシュ時に実行
   pull_request:
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
+    types: [opened, synchronize, reopened] # PR作成・更新時に実行
+  workflow_dispatch: # 手動実行可能
 
 jobs:
   build:
     name: SonarCloud
     runs-on: ubuntu-latest
     steps:
+      # コードをチェックアウト（分析精度向上のため full clone）
       - uses: actions/checkout@v4.1.1
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
+      # Node.js 20 環境をセットアップ
       - name: Set up Node.js
         uses: actions/setup-node@v4.0.3
         with:
           node-version: 20
 
+      # Yarn パッケージマネージャーを有効化
       - name: Enable corepack
         run: corepack enable yarn
 
+      # 依存関係のキャッシュを復元（高速化のため）
       - name: Restore cache
         uses: actions/cache@v4
         with:
@@ -33,19 +39,23 @@ jobs:
           key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: v5-${{ runner.os }}-yarn-
 
+      # プロジェクトの依存関係をインストール
       - name: Install dependencies
         run: yarn install
 
+      # ESLint実行とレポート生成（パス修正付き）
       - name: Generates lint report and file path formatting
         run: |
           yarn lint:ci:report
           sed -i 's|/home/runner/work/lichtblick/lichtblick/|./|g' eslint-report.json
-        continue-on-error: true
+        continue-on-error: true # 失敗してもワークフローを継続
 
+      # テスト実行とカバレッジ生成
       - name: Test and coverage
         run: yarn test:coverage
-        continue-on-error: true
+        continue-on-error: true # 失敗してもワークフローを継続
 
+      # SonarCloud による静的解析実行
       - name: ScanCloud Scan
         uses: sonarsource/sonarqube-scan-action@v5.2.0
         env:

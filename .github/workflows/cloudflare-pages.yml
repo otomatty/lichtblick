@@ -1,11 +1,13 @@
+# Cloudflare Pages への自動デプロイワークフロー
+# プルリクエスト時にプレビュー環境を自動作成してレビューを支援
 name: Cloudflare Pages
 
 on:
-  pull_request: {}
+  pull_request: {} # 全てのプルリクエストで実行
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: false # 複数のプレビュー環境を同時維持
 
 jobs:
   deploy:
@@ -13,33 +15,40 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Environment variables that are injected into the build
+      # ビルド時に注入される環境変数
       ENABLE_EXPERIMENTAL_COREPACK: 1
 
     steps:
+      # サブモジュールを含む完全なリポジトリチェックアウト
       - uses: actions/checkout@v4.1.1
         with:
           submodules: true
 
+      # Node.js 16.17 環境をセットアップ
       - uses: actions/setup-node@v4.0.3
         with:
           node-version: 16.17
 
+      # Yarn パッケージマネージャーを有効化
       - run: corepack enable
 
+      # 依存関係をインストール（厳密なロック）
       - run: yarn install --immutable
 
+      # プロダクション向けWebアプリケーションをビルド
       - run: yarn web:build:prod
 
+      # Vercel-Cloudflare互換性のための設定ファイル配置
       - name: vercel-cloudflare compatibility
         run: |
           cp web/.cloudflare/* web/.webpack/
 
+      # Cloudflare Pages へのデプロイ実行
       - uses: cloudflare/pages-action@v1.5.0
         with:
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          gitHubToken: ${{ secrets.LICHTBLICKBOT_GITHUB_TOKEN }}
-          branch: ${{ github.head_ref || github.ref_name }}
-          projectName: lichtblick-suite-oss
-          directory: web/.webpack
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }} # Cloudflareアカウント
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }} # API認証トークン
+          gitHubToken: ${{ secrets.LICHTBLICKBOT_GITHUB_TOKEN }} # GitHub統合
+          branch: ${{ github.head_ref || github.ref_name }} # ブランチ名（動的）
+          projectName: lichtblick-suite-oss # プロジェクト名
+          directory: web/.webpack # デプロイ対象ディレクトリ

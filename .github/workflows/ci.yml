@@ -1,59 +1,63 @@
+# 継続的インテグレーション (CI) ワークフロー
+# コードの品質を包括的に検証（リント、テスト、ビルド、E2E）
 name: CI
 
 on:
   push:
-    branches: [main, release/*]
-  pull_request:
+    branches: [main, release/*] # mainとreleaseブランチへのプッシュ時
+  pull_request: # 全てのプルリクエスト時
 
 jobs:
   test:
     runs-on: ${{ matrix.os }}
 
-    # Run each command in parallel with the same setup steps.
+    # 複数の検証タスクを並行実行（fail-fast無効で全て実行）
     strategy:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-latest # メインの実行環境
         config:
-          # Specify names so that the GitHub branch protection settings for
-          # required checks don't need to change if we ever change the commands used.
-          - name: lint
+          # GitHub branch protection設定に合わせた固定の名前
+          - name: lint # 静的解析とコード品質チェック
             command: |
-              # lint steps
+              # 各種lintステップ
               set -x
-              yarn license-check
-              yarn dedupe --check
-              yarn run tsc --noEmit # typecheck files that are not included by webpack or package builds
-              yarn run lint:ci
-              yarn run lint:unused-exports
-              yarn run lint:dependencies
-          - name: packages
+              yarn license-check           # ライセンス確認
+              yarn dedupe --check          # 重複依存関係チェック
+              yarn run tsc --noEmit        # TypeScript型チェック
+              yarn run lint:ci             # ESLint静的解析
+              yarn run lint:unused-exports # 未使用エクスポートチェック
+              yarn run lint:dependencies   # 依存関係チェック
+          - name: packages # 共通パッケージのビルド
             command: yarn run build:packages
-          - name: web
+          - name: web # Webアプリケーションのビルド
             command: yarn run web:build:prod
-          - name: desktop
+          - name: desktop # デスクトップアプリケーションのビルド
             command: yarn run desktop:build:prod
-          - name: build benchmark
+          - name: build benchmark # ベンチマークアプリのビルド
             command: yarn run benchmark:build:prod
-          - name: test
+          - name: test # 単体テストの実行（最大ワーカー数）
             command: yarn run test --maxWorkers=100%
         include:
-          - os: windows-latest
+          - os: windows-latest # Windows環境での限定的なテスト
             config:
               name: packages
-              command: echo complete
+              command: echo complete # 現在はスキップ
 
     name: ${{ matrix.config.name }} (${{ matrix.os }})
 
     steps:
+      # リポジトリのチェックアウト
       - uses: actions/checkout@v4.1.1
 
+      # Node.js 20 環境をセットアップ
       - uses: actions/setup-node@v4.0.3
         with:
           node-version: 20
       - run: corepack enable yarn
 
+      # 依存関係のキャッシュを復元（高速化のため）
       - name: Restore cache
         uses: actions/cache@v4
         with:
@@ -63,8 +67,10 @@ jobs:
           key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: v5-${{ runner.os }}-yarn-
 
+      # 依存関係をインストール（厳密なロック）
       - run: yarn install --immutable
 
+      # マトリックスで指定されたコマンドを実行
       - run: ${{ matrix.config.command }}
 
   e2e:
@@ -73,13 +79,16 @@ jobs:
     name: e2e (ubuntu-latest)
 
     steps:
+      # リポジトリのチェックアウト
       - uses: actions/checkout@v4.1.1
 
+      # Node.js 20 環境をセットアップ
       - uses: actions/setup-node@v4.0.3
         with:
           node-version: 20
       - run: corepack enable yarn
 
+      # 依存関係のキャッシュを復元（高速化のため）
       - name: Restore cache
         uses: actions/cache@v4
         with:
@@ -89,13 +98,16 @@ jobs:
           key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: v5-${{ runner.os }}-yarn-
 
+      # 依存関係をインストール（厳密なロック）
       - run: yarn install --immutable
 
+      # Playwright実行のためのAppArmor設定修正
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright on Ubuntu to work properly
         # See: https://github.com/microsoft/playwright/issues/34251
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      # E2Eテストの実行（仮想ディスプレイ使用）
       - name: test:e2e:desktop:ci (ubuntu-latest)
         uses: coactions/setup-xvfb@v1
         with:

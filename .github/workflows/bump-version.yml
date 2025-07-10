@@ -1,29 +1,35 @@
+# mainブランチへのプッシュ時に自動でバージョンをパッチアップするワークフロー
+# 継続的な開発における小さな変更の自動バージョン管理
 name: Auto Bump Version
 
 on:
   push:
     branches:
-      - main # Trigger on push to main branch
+      - main # mainブランチへのプッシュ時にトリガー
 
 permissions:
-  actions: write
+  actions: write # 他のワークフロー実行権限
 
 jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
+      # リポジトリのチェックアウト（書き込み権限付きトークン使用）
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.LICHTBLICK_GITHUB_TOKEN }}
 
+      # Node.js 14 環境をセットアップ
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "14"
 
+      # Yarn パッケージマネージャーを有効化
       - run: corepack enable
 
+      # 依存関係のキャッシュを復元（高速化のため）
       - name: Cache yarn dependencies
         uses: actions/cache@v4
         with:
@@ -34,23 +40,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
 
+      # 依存関係をインストール（スキップビルドモード）
       - name: Install dependencies
         run: yarn install --mode skip-build
         env:
-          YARN_ENABLE_IMMUTABLE_INSTALLS: false
+          YARN_ENABLE_IMMUTABLE_INSTALLS: false # バージョン更新のため無効化
 
+      # Git設定（GitHub Actionsボットとして）
       - name: Set up Git
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
 
+      # ルートpackage.jsonのpatchバージョンアップ
       - name: Bump version in root package.json
         run: yarn version patch
 
+      # packages/suiteのpatchバージョンアップ
       - name: Bump version in packages/suite
         working-directory: packages/suite
         run: yarn version patch
 
+      # バージョンアップをコミット（skip actionsで無限ループ防止）
       - name: Commit version bumps
         id: commit_version_bumps
         run: |
@@ -58,10 +69,12 @@ jobs:
           git commit -m "chore: bump versions in root and suite package.json [skip actions]"
           echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+      # mainブランチへプッシュ
       - name: Push changes
         run: |
           git push origin main
 
+      # Pre-buildワークフローを手動トリガー
       - name: Trigger pre-build workflow
         run: |
           curl -X POST -H "Accept: application/vnd.github+json" \

@@ -1,53 +1,66 @@
+# 正式リリース作業を自動化するワークフロー
+# 全プラットフォーム向けビルド、バージョンアップ、GitHub Release作成を一括実行
 name: Release
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手動実行のみ（慎重なリリースプロセス）
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-latest # 全プラットフォーム対応のためmacOS環境を使用
 
     steps:
+      # リポジトリのチェックアウト（書き込み権限付きトークン使用）
       - name: Checkout Repository
         uses: actions/checkout@v4.1.1
         with:
           token: ${{ secrets.LICHTBLICK_GITHUB_TOKEN }}
 
+      # Node.js 16.17 環境をセットアップ
       - name: Set up Node.js
         uses: actions/setup-node@v4.0.3
         with:
           node-version: 16.17
 
+      # Yarn パッケージマネージャーを有効化
       - name: Enable corepack
         run: corepack enable yarn
 
+      # ルートpackage.jsonのminorバージョンアップ
       - name: Bump minor version and save it on environment variable
         run: |
           yarn version minor
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
+      # @lichtblick/suiteパッケージのバージョンアップ
       - name: Bump @lichtblick/suite version
         run: yarn version minor
         working-directory: packages/suite
 
+      # 依存関係のインストール（厳密なロック）
       - name: Install dependencies
         run: yarn install --immutable
 
+      # プロダクション向けビルド実行
       - name: Build prod files
         run: |
           yarn run desktop:build:prod
           yarn run web:build:prod
 
+      # Windows版実行ファイルのビルド
       - name: Build windows version
         run: yarn run package:win
 
+      # Linux版パッケージのビルド
       - name: Build linux version
         run: yarn run package:linux
 
+      # macOS版DMGファイルのビルド
       - name: Build macOS version
         run: yarn run package:darwin
 
+      # Web版静的ファイルのアーカイブ作成
       - name: Create web static files tarball
         run: tar -czf dist/lichtblick-web.tar.gz -C web/.webpack .
 

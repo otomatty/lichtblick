@@ -1,25 +1,30 @@
+# 古いIssueとプルリクエストを自動管理するワークフロー
+# 長期間活動のないアイテムを自動でStaleマーク→クローズ
 name: Stale
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *" # 毎日午前0時（UTC）に実行
 
 jobs:
   stale:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: write
+      issues: write # Issue操作権限
+      pull-requests: write # PR操作権限
     steps:
+      # GitHub Stale Action を使用した自動管理
       - uses: actions/stale@v9.1.0
         with:
+          # Issue関連設定（12ヶ月後にStale、その30日後にクローズ）
           stale-issue-message: "This issue has been marked as stale because there has been no activity in the past 12 months. Please add a comment to keep it open."
           stale-issue-label: stale
-          days-before-issue-stale: 365
-          days-before-issue-close: 30
+          days-before-issue-stale: 365 # 365日でStale判定
+          days-before-issue-close: 30 # Stale後30日でクローズ
 
+          # PR関連設定（3ヶ月後にStale、その30日後にクローズ＋ブランチ削除）
           stale-pr-message: "This PR has been marked as stale because there has been no activity in the past 3 months. Please add a comment to keep it open."
           stale-pr-label: stale
-          days-before-pr-stale: 90
-          days-before-pr-close: 30
-          delete-branch: true
+          days-before-pr-stale: 90 # 90日でStale判定
+          days-before-pr-close: 30 # Stale後30日でクローズ
+          delete-branch: true # クローズ時にブランチも削除

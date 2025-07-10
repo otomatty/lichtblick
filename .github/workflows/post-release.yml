@@ -1,6 +1,8 @@
+# リリース後処理ワークフロー
+# GitHub Releaseが公開された後にNPMパッケージとDockerイメージを自動公開
 name: Post Release
 
-# run after releases are published
+# リリース公開後に実行
 on:
   release:
     types: [released]
@@ -11,20 +13,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # リリースタグをチェックアウト（確実にリリース版を使用）
       - name: Checkout ${{ github.event.release.tag_name }}
         uses: actions/checkout@v4.1.1
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      # Node.js 16.17 環境をセットアップ（NPMレジストリ設定付き）
       - uses: actions/setup-node@v4.0.3
         with:
           node-version: 16.17
           registry-url: https://registry.npmjs.org
 
+      # Yarn パッケージマネージャーを有効化
       - run: corepack enable yarn
 
+      # 依存関係をインストール（厳密なロック）
       - run: yarn install --immutable
 
+      # @lichtblick/suite パッケージをNPMに公開
       - run: npm publish ./packages/suite
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
@@ -34,18 +41,21 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
-      packages: write
+      contents: read # リポジトリ読み取り権限
+      packages: write # パッケージ書き込み権限
 
     steps:
+      # リリースタグをチェックアウト（確実にリリース版を使用）
       - name: Checkout ${{ github.event.release.tag_name }}
         uses: actions/checkout@v4.1.1
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      # Docker Buildx セットアップ（マルチアーキテクチャ対応）
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # GitHub Container Registry へログイン
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -53,6 +63,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # バージョン番号を正規化（v1.2.3 → 1.2.3）
       - name: Format version
         id: format_version
         run: |
@@ -60,6 +71,7 @@ jobs:
           FORMATTED_VERSION=$(echo "$VERSION" | sed 's/^v//')
           echo "::set-output name=formatted_version::$FORMATTED_VERSION"
 
+      # Dockerイメージをビルド・プッシュ（latest + バージョンタグ）
       - name: Build and Push Docker image
         uses: docker/build-push-action@v5
         with:

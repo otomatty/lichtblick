@@ -1,52 +1,56 @@
-# Automatically run `yarn dedupe` for dependabot PRs.
-# This is necessary because dependabot doesn't run it automatically:
-# https://github.com/dependabot/dependabot-core/issues/5830
+# Dependabotが作成したプルリクエストの自動修正ワークフロー
+# yarn dedupeの自動実行とPRの自動承認を行う
 #
-# Note: We use the `pull_request_target` event due to GitHub security measures.
-#       It is important to ensure we don't execute any untrusted PR code in this context.
-# See: https://github.blog/changelog/2021-02-19-github-actions-workflows-triggered-by-dependabot-prs-will-run-with-read-only-permissions/
-#      https://securitylab.github.com/research/github-actions-preventing-pwn-requests
+# セキュリティ上重要: pull_request_targetイベントを使用
+# 信頼されたコンテキストで実行されるため、スクリプト実行は無効化
+#
+# 参考:
+# - https://github.com/dependabot/dependabot-core/issues/5830
+# - https://github.blog/changelog/2021-02-19-github-actions-workflows-triggered-by-dependabot-prs-will-run-with-read-only-permissions/
+# - https://securitylab.github.com/research/github-actions-preventing-pwn-requests
 
 name: Dependabot
 
 on:
-  - pull_request_target
+  - pull_request_target # セキュリティ対策のため
 
 jobs:
   fix:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: github.actor == 'dependabot[bot]' # Dependabotのみ実行
 
-    # IMPORTANT: setting YARN_ENABLE_SCRIPTS=false is critical to ensure that untrusted
-    # PRs can't add an npm package and then use that to execute untrusted code in
-    # a trusted context. See links at the top of this workflow for further details.
-    # See also: https://github.com/yarnpkg/berry/issues/1679#issuecomment-669937860
+    # セキュリティ上重要: スクリプト実行を無効化
+    # 信頼されないPRが悪意のあるnpmパッケージを追加して
+    # 信頼されたコンテキストで任意コードを実行するのを防ぐ
     env:
       YARN_ENABLE_SCRIPTS: false
 
     steps:
+      # PRブランチのチェックアウト（専用トークン使用）
+      # 新しいコミットでワークフローをトリガーするため専用トークンが必要
       - uses: actions/checkout@v4.1.1
         with:
-          # Using a Personal Access Token here is required to trigger workflows on our new commit.
-          # The default GitHub token doesn't trigger any workflows.
-          # See: https://github.community/t/push-from-action-does-not-trigger-subsequent-action/16854/2
           token: ${{ secrets.LICHTBLICK_GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.ref }}
 
+      # Node.js 16.17 環境をセットアップ
       - uses: actions/setup-node@v4.0.3
         with:
           node-version: 16.17
 
+      # Yarn パッケージマネージャーを有効化
       - run: corepack enable
 
+      # 依存関係をインストール（スキップビルドモード）
       - run: yarn install --mode skip-build
         env:
-          # yarn runs in immutable mode "by default" in CI -- turning this off requires an
-          # undocumented env var
+          # CI環境のimmutableモードを無効化（更新許可のため）
           YARN_ENABLE_IMMUTABLE_INSTALLS: false
 
+      # yarn dedupe実行（重複依存関係の解決）
       - run: yarn dedupe
 
+      # 修正内容をコミット・プッシュ
       - name: Commit yarn.lock
         run: |
           git config user.name "dependabot[bot]"
@@ -55,6 +59,7 @@ jobs:
           git commit -m '[dependabot skip] Fix yarn.lock' --allow-empty
           git push
 
+      # 新規作成PRの自動承認
       - uses: octokit/request-action@v2.4.0
         if: contains(fromJSON('["opened", "reopened"]'), github.event.action)
         env:
@@ -65,6 +70,7 @@ jobs:
           pull_number: ${{ github.event.pull_request.number }}
           event: "APPROVE"
 
+      # Dependabotに自動マージ指示コメント
       - uses: octokit/request-action@v2.4.0
         if: contains(fromJSON('["opened", "reopened"]'), github.event.action)
         env:
@@ -73,5 +79,5 @@ jobs:
           route: POST /repos/{owner_and_repo}/issues/{pull_number}/comments
           owner_and_repo: ${{ github.repository }}
           pull_number: ${{ github.event.pull_request.number }}
-          # two quotes are needed to avoid a syntax error when running the action
+          # シンタックスエラー回避のため二重引用符
           body: "'@dependabot squash and merge'"
